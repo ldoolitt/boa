@@ -78,6 +78,114 @@ void build_needs_escape(void)
     }
 }
 
+/*
+ * Name: html_escape_string
+ */
+char *html_escape_string(const char *inp, char *dest,
+                         const unsigned int len)
+{
+    int max;
+    char *buf;
+    unsigned char c;
+
+    max = len * 6;
+
+    if (dest == NULL && max)
+        dest = malloc(sizeof (unsigned char) * (max + 1));
+
+    if (dest == NULL)
+        return NULL;
+
+    buf = dest;
+    while ((c = *inp++)) {
+        switch (c) {
+        case '>':
+            *dest++ = '&';
+            *dest++ = 'g';
+            *dest++ = 't';
+            *dest++ = ';';
+            break;
+        case '<':
+            *dest++ = '&';
+            *dest++ = 'l';
+            *dest++ = 't';
+            *dest++ = ';';
+            break;
+        case '&':
+            *dest++ = '&';
+            *dest++ = 'a';
+            *dest++ = 'm';
+            *dest++ = 'p';
+            *dest++ = ';';
+            break;
+        case '\"':
+            *dest++ = '&';
+            *dest++ = 'q';
+            *dest++ = 'u';
+            *dest++ = 'o';
+            *dest++ = 't';
+            *dest++ = ';';
+            break;
+        default:
+            *dest++ = c;
+        }
+    }
+    *dest = '\0';
+    return buf;
+}
+
+
+/*
+ * Name: http_escape_string
+ *
+ * Description: escapes the string inp.  Uses variable buf.  If buf is
+ *  NULL when the program starts, it will attempt to dynamically allocate
+ *  the space that it needs, otherwise it will assume that the user
+ *  has already allocated enough space for the variable buf, which
+ *  could be up to 3 times the size of inp.  If the routine dynamically
+ *  allocates the space, the user is responsible for freeing it afterwords
+ * Returns: NULL on error, pointer to string otherwise.
+ */
+
+char *http_escape_string(const char *inp, char *buf,
+                         const unsigned int len)
+{
+    int max;
+    char *index_c;
+    unsigned char c;
+    int found_a_colon = 0;
+
+    max = len * 3;
+
+    if (buf == NULL && max)
+        buf = malloc(sizeof (unsigned char) * (max + 1));
+
+    if (buf == NULL)
+        return NULL;
+
+    index_c = buf;
+    while ((c = *inp++)) {
+        if (c == ':' && !found_a_colon && index_c > buf) {
+            found_a_colon = 1;
+            memmove(buf + 2, buf, (index_c - buf));
+            *buf = '.';
+            *(buf + 1) = '/';
+            index_c += 2;
+            *index_c++ = ':';
+        } else if (needs_escape((unsigned int) c) || c == '?') {
+            *index_c++ = '%';
+            *index_c++ = INT_TO_HEX((c >> 4) & 0xf);
+            *index_c++ = INT_TO_HEX(c & 0xf);
+        } else
+            *index_c++ = c;
+    }
+    *index_c = '\0';
+
+    return buf;
+}
+
+
+
 #ifdef TEST
 int main(void)
 {

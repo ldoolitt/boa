@@ -46,3 +46,8 @@ extern unsigned long
     _needs_escape[(NEEDS_ESCAPE_BITS + NEEDS_ESCAPE_WORD_LENGTH -
                    1) / NEEDS_ESCAPE_WORD_LENGTH];
 void build_needs_escape(void);
+char *html_escape_string(const char *inp, char *dest,
+                         const unsigned int len);
+char *http_escape_string(const char *inp, char *buf,
+                         const unsigned int len);
+

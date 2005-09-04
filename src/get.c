@@ -737,8 +737,7 @@ static int index_directory(request * req, char *dest_filename)
             continue;
         }
 
-        /* FIXME: ought to use (as-yet unwritten) html_escape_string */
-        escname = escape_string(dirbuf->d_name, NULL);
+        escname = html_escape_string(dirbuf->d_name, NULL, 0);
         if (escname != NULL) {
             err = fprintf(fdstream, " <A HREF=\"%s\">%s</A>\n",
                              escname, dirbuf->d_name);
