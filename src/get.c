@@ -672,21 +672,15 @@ static int index_directory(request * req, char *dest_filename)
     struct dirent *dirbuf;
     int bytes = 0;
     char *escname = NULL;
+    int err;
 
-    if (chdir(req->pathname) == -1) {
-        if (errno == EACCES || errno == EPERM) {
-            send_r_forbidden(req);
-        } else {
-            log_error_doc(req);
-            perror("chdir");
-            send_r_bad_request(req);
-        }
-        return -1;
-    }
-
-    request_dir = opendir(".");
+    request_dir = opendir(req->pathname);
     if (request_dir == NULL) {
         int errno_save = errno;
+        if (errno == EACCES || errno == EPERM) {
+            send_r_forbidden(req);
+            return -1;
+        }
         send_r_error(req);
         log_error_doc(req);
         fprintf(stderr, "opendir failed on directory \"%s\": ", req->pathname);
@@ -702,37 +696,78 @@ static int index_directory(request * req, char *dest_filename)
         return -1;
     }
 
-    bytes += fprintf(fdstream,
+    err = fprintf(fdstream,
                      "<HTML><HEAD>\n<TITLE>Index of %s</TITLE>\n</HEAD>\n\n",
+                  req->request_uri);
+    if (err < 0) {
+        boa_perror(req, "fprintf to dircache file");
+        closedir(request_dir);
+        fclose(fdstream);
+        unlink(dest_filename);
+        return -1;
+    }
+    bytes += err;
+
+    err = fprintf(fdstream, "<BODY>\n\n<H2>Index of %s</H2>\n\n<PRE>\n",
                      req->request_uri);
-    bytes += fprintf(fdstream, "<BODY>\n\n<H2>Index of %s</H2>\n\n<PRE>\n",
-                     req->request_uri);
+    if (err < 0) {
+        boa_perror(req, "fprintf to dircache file");
+        closedir(request_dir);
+        fclose(fdstream);
+        unlink(dest_filename);
+        return -1;
+    }
+    bytes += err;
 
     while ((dirbuf = readdir(request_dir))) {
         if (!strcmp(dirbuf->d_name, "."))
             continue;
 
         if (!strcmp(dirbuf->d_name, "..")) {
-            bytes += fprintf(fdstream,
+            err = fprintf(fdstream,
                              " [DIR] <A HREF=\"../\">Parent Directory</A>\n");
+            if (err < 0) {
+                boa_perror(req, "fprintf to dircache file");
+                closedir(request_dir);
+                fclose(fdstream);
+                unlink(dest_filename);
+                return -1;
+            }
+            bytes += err;
             continue;
         }
 
         /* FIXME: ought to use (as-yet unwritten) html_escape_string */
         escname = escape_string(dirbuf->d_name, NULL);
         if (escname != NULL) {
-            bytes += fprintf(fdstream, " <A HREF=\"%s\">%s</A>\n",
+            err = fprintf(fdstream, " <A HREF=\"%s\">%s</A>\n",
                              escname, dirbuf->d_name);
+            if (err < 0) {
+                boa_perror(req, "fprintf to dircache file");
+                closedir(request_dir);
+                fclose(fdstream);
+                unlink(dest_filename);
+                free(escname);
+                escname = NULL;
+                return -1;
+            }
+            bytes += err;
             free(escname);
             escname = NULL;
         }
     }
     closedir(request_dir);
-    bytes += fprintf(fdstream, "</PRE>\n\n</BODY>\n</HTML>\n");
+    err = fprintf(fdstream, "</PRE>\n\n</BODY>\n</HTML>\n");
+    if (err < 0) {
+        boa_perror(req, "fprintf to dircache file");
+        closedir(request_dir);
+        fclose(fdstream);
+        unlink(dest_filename);
+        return -1;
+    }
+    bytes += err;
 
     fclose(fdstream);
-
-    chdir(server_root);
 
     req->filesize = bytes;      /* for logging transfer size */
     return 0;                   /* success */
