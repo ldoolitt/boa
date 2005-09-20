@@ -146,7 +146,7 @@ int init_get(request * req)
 #else
             char *host = server_name;
             unsigned int l2;
-            char *port = NULL;
+            const char *port = NULL;
             const char *prefix = "http://";
             static unsigned int l3 = 0;
             static unsigned int l4 = 0;
