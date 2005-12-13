@@ -65,6 +65,7 @@
 #define MAX_HEADER_LENGTH			1024
 
 #define MIME_HASHTABLE_SIZE			1009
+#define ENCODING_HASHTABLE_SIZE                  3
 #define ALIAS_HASHTABLE_SIZE                    17
 #define PASSWD_HASHTABLE_SIZE		        47
 

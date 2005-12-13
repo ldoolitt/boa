@@ -52,8 +52,11 @@ struct _hash_struct_ {
 typedef struct _hash_struct_ hash_struct;
 
 static hash_struct *mime_hashtable[MIME_HASHTABLE_SIZE];
+static hash_struct *encoding_hashtable[ENCODING_HASHTABLE_SIZE];
 static hash_struct *passwd_hashtable[PASSWD_HASHTABLE_SIZE];
 void add_mime_type(const char *extension, const char *type);
+static unsigned get_mime_hash_value(const char *extension);
+static unsigned get_encoding_hash_value(const char *extension);
 static unsigned get_homedir_hash_value(const char *name);
 
 #ifdef WANT_ICKY_HASH
@@ -266,7 +269,7 @@ hash_struct *hash_insert(hash_struct * table[], const unsigned int hash,
 
 static
 hash_struct *hash_find(hash_struct * table[], const char *key,
-                          const unsigned int hash)
+                       const unsigned int hash)
 {
     hash_struct *current;
 
@@ -369,6 +372,9 @@ void hash_show_stats(void)
 /*******************************************************************/
 /*******************************************************************/
 
+/*******************************************************************/
+/******* mime/type hash functions **********************************/
+/*******************************************************************/
 /*
  * Name: add_mime_type
  * Description: Adds a key/value pair to the mime_hashtable
@@ -380,7 +386,7 @@ void add_mime_type(const char *extension, const char *type)
 
     hash = get_mime_hash_value(extension);
     if (hash_insert(mime_hashtable, hash, extension, type) == NULL)
-	DIE("Failed to hash_insert mime type.");
+        DIE("Failed to hash_insert mime type.");
 }
 
 /*
@@ -390,7 +396,7 @@ void add_mime_type(const char *extension, const char *type)
  * and mods by the hashtable size to get the hash value
  */
 
-unsigned get_mime_hash_value(const char *extension)
+static unsigned get_mime_hash_value(const char *extension)
 {
     return boa_hash(extension) % MIME_HASHTABLE_SIZE;
 }
@@ -440,6 +446,93 @@ char *get_mime_type(const char *filename)
     return (current ? current->value : default_type);
 }
 
+void dump_mime(void)
+{
+    hash_clear(mime_hashtable, MIME_HASHTABLE_SIZE);
+}
+
+/*******************************************************************/
+/******* content/encoding hash functions ***************************/
+/*******************************************************************/
+/*
+ * Name: add_encoding
+ * Description: Adds a key/value pair to the mime_hashtable
+ */
+
+void add_encoding(const char *extension, const char *type)
+{
+    unsigned int hash;
+
+    hash = get_encoding_hash_value(extension);
+    if (hash_insert(encoding_hashtable, hash, extension, type) == NULL)
+        DIE("Failed to hash_insert encoding.");
+}
+
+/*
+ * Name: get_encoding_hash_value
+ *
+ * Description: adds the ASCII values of the file extension letters
+ * and mods by the hashtable size to get the hash value
+ */
+
+static unsigned get_encoding_hash_value(const char *extension)
+{
+    return boa_hash(extension) % ENCODING_HASHTABLE_SIZE;
+}
+
+/*
+ * Name: get_content_encoding
+ *
+ * Description: Returns the encoding type for a supplied filename.
+ * Returns default type if not found.
+ */
+
+char *get_content_encoding(const char *filename)
+{
+    char *extension;
+    hash_struct *current;
+
+    unsigned int hash;
+
+    if (filename == NULL) {
+        log_error_time();
+        fprintf(stderr,
+                "Attempt to hash NULL string! [get_content_encoding]\n");
+        return NULL;
+    } else if (filename[0] == '\0') {
+        log_error_time();
+        fprintf(stderr,
+                "Attempt to hash empty string! [get_content_encoding]\n");
+        return NULL;
+    }
+
+    extension = strrchr(filename, '.');
+
+    /* remember, extension points to the *last* '.' in the filename,
+     * which may be NULL or look like:
+     *  foo.bar
+     *  foo. (in which case extension[1] == '\0')
+     */
+    /* extension[0] *can't* be NIL */
+    if (!extension || extension[1] == '\0')
+        return NULL;
+
+    /* make sure we hash on the 'bar' not the '.bar' */
+    ++extension;
+
+    hash = get_encoding_hash_value(extension);
+    current = hash_find(encoding_hashtable, extension, hash);
+    return (current ? current->value : NULL);
+}
+
+void dump_encoding(void)
+{
+    hash_clear(encoding_hashtable, ENCODING_HASHTABLE_SIZE);
+}
+
+/*******************************************************************/
+/******* homedirectory hash functions ******************************/
+/*******************************************************************/
 /*
  * Name: get_homedir_hash_value
  *
@@ -485,11 +578,6 @@ char *get_home_dir(const char *name)
     }
 
     return (current ? current->value : NULL);
-}
-
-void dump_mime(void)
-{
-    hash_clear(mime_hashtable, MIME_HASHTABLE_SIZE);
 }
 
 void dump_passwd(void)

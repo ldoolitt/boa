@@ -93,6 +93,7 @@ int init_get(request * req)
                 req_write(req, " 200 OK-GUNZIP" CRLF);
                 print_http_headers(req);
                 print_content_type(req);
+                print_content_encoding(req);
                 print_last_modified(req);
                 req_write(req, CRLF);
                 req_flush(req);

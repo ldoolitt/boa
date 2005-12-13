@@ -79,6 +79,7 @@ static void c_set_int(char *v1, char *v2, void *t);
 static void c_set_unity(char *v1, char *v2, void *t);
 static void c_add_mime_types_file(char *v1, char *v2, void *t);
 static void c_add_mime_type(char *v1, char *v2, void *t);
+static void c_add_encoding(char *v1, char *v2, void *t);
 static void c_add_alias(char *v1, char *v2, void *t);
 static void c_add_access(char *v1, char *v2, void *t);
 
@@ -146,6 +147,7 @@ static struct ccommand clist[] = {
     {"DefaultType", S1A, c_set_string, &default_type},
     {"DefaultCharset", S1A, c_set_string, &default_charset},
     {"AddType", S2A, c_add_mime_type, NULL},
+    {"AddEncoding", S2A, c_add_encoding, NULL},
     {"ScriptAlias", S2A, c_add_alias, &script_number},
     {"Redirect", S2A, c_add_alias, &redirect_number},
     {"Alias", S2A, c_add_alias, &alias_number},
@@ -295,6 +297,11 @@ static void c_set_unity(char *v1, char *v2, void *t)
 static void c_add_mime_type(char *v1, char *v2, void *t)
 {
     add_mime_type(v2, v1);
+}
+
+static void c_add_encoding(char *v1, char *v2, void *t)
+{
+    add_encoding(v2, v1);
 }
 
 static void c_add_mime_types_file(char *v1, char *v2, void *t)

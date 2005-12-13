@@ -73,13 +73,15 @@ int process_get(request * req);
 int get_dir(request * req, struct stat *statbuf);
 
 /* hash */
-unsigned get_mime_hash_value(const char *extension);
 char *get_mime_type(const char *filename);
+char *get_content_encoding(const char *filename);
 char *get_home_dir(const char *name);
 void dump_mime(void);
+void dump_encoding(void);
 void dump_passwd(void);
 void hash_show_stats(void);
 void add_mime_type(const char *extension, const char *type);
+void add_encoding(const char *extension, const char *encoding);
 
 /* log */
 void open_logs(void);
@@ -122,6 +124,7 @@ void free_requests(void);
 const char *http_ver_string(enum HTTP_VERSION ver);
 void print_ka_phrase(request * req);
 void print_content_type(request * req);
+void print_content_encoding(request * req);
 void print_content_length(request * req);
 void print_last_modified(request * req);
 void print_http_headers(request * req);

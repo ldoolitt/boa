@@ -61,6 +61,18 @@ void print_content_type(request * req)
     }
 }
 
+void print_content_encoding(request * req)
+{
+    char *content_encoding = get_content_encoding(req->request_uri);
+
+    if (content_encoding != NULL) {
+        req_write(req, "Content-Encoding: ");
+        req_write(req, content_encoding);
+        req_write(req, CRLF);
+    }
+}
+
+
 void print_content_length(request * req)
 {
     req_write(req, "Content-Length: ");
@@ -124,6 +136,7 @@ void print_partial_content_continue(request * req)
         req_write(req, msg);
     }
     print_content_type(req);
+    print_content_encoding(req);
     print_content_range(req);
 }
 
@@ -138,7 +151,7 @@ void print_partial_content_done(request * req)
  * The rest of Boa only enters through the routines below.
  */
 
-int complete_response(request *req)
+int complete_response(request * req)
 {
     Range *r;
 
@@ -194,6 +207,7 @@ void send_r_request_ok(request * req)
         print_content_length(req);
         print_last_modified(req);
         print_content_type(req);
+        print_content_encoding(req);
         req_write(req, CRLF);
     }
 }
@@ -314,6 +328,7 @@ void send_r_not_modified(request * req)
     req_write(req, " 304 Not Modified" CRLF);
     print_http_headers(req);
     print_content_type(req);
+    print_content_encoding(req);
     req_write(req, CRLF);
     req_flush(req);
 }
@@ -416,6 +431,7 @@ void send_r_length_required(request * req)
         req_write(req, "Content-Type: " HTML CRLF);
         print_last_modified(req);
         print_content_type(req);
+        print_content_encoding(req);
         req_write(req, CRLF);
     }
     if (req->method != M_HEAD) {
@@ -565,8 +581,8 @@ void send_r_service_unavailable(request * req)
         "<HTML><HEAD><TITLE>503 Service Unavailable</TITLE></HEAD>\n"
         "<BODY><H1>503 Service Unavailable</H1>\n"
         "There are too many connections in use right now.\n"
-	"Please try again later.\n"
-	"</BODY></HTML>\n";
+       "Please try again later.\n"
+       "</BODY></HTML>\n";
     static unsigned int _body_len;
     static char *body_len;
 
