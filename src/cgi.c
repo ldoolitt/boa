@@ -43,74 +43,25 @@ short common_cgi_env_count = 0;
 
 void create_common_env(void)
 {
-    int i;
-    common_cgi_env = calloc((COMMON_CGI_COUNT + 1),sizeof(char *));
-    common_cgi_env_count = 0;
-
-    if (common_cgi_env == NULL) {
-        DIE("unable to allocate memory for common_cgi_env");
-    }
-
-    /* NOTE NOTE NOTE:
-       If you (the reader) someday modify this chunk of code to
-       handle more "common" CGI environment variables, then bump the
-       value COMMON_CGI_COUNT in defines.h UP
-
-       Also, in the case of document_root and server_admin, two variables
-       that may or may not be defined depending on the way the server
-       is configured, we check for null values and use an empty
-       string to denote a NULL value to the environment, as per the
-       specification. The quote for which follows:
-
-       "In all cases, a missing environment variable is
-       equivalent to a zero-length (NULL) value, and vice versa."
-     */
-    common_cgi_env[common_cgi_env_count++] = env_gen_extra("PATH",
-                                         ((cgi_path !=
-                                           NULL) ? cgi_path :
-                                          DEFAULT_PATH), 0);
-    common_cgi_env[common_cgi_env_count++] =
-        env_gen_extra("SERVER_SOFTWARE", SERVER_VERSION, 0);
-    common_cgi_env[common_cgi_env_count++] = env_gen_extra("SERVER_NAME", server_name, 0);
-    common_cgi_env[common_cgi_env_count++] =
-        env_gen_extra("GATEWAY_INTERFACE", CGI_VERSION, 0);
-
-    common_cgi_env[common_cgi_env_count++] =
-        env_gen_extra("SERVER_PORT", simple_itoa(server_port), 0);
-
+    add_to_common_env("PATH", (cgi_path ? cgi_path : DEFAULT_PATH));
+    add_to_common_env("SERVER_SOFTWARE", SERVER_VERSION);
+    add_to_common_env("SERVER_NAME", server_name);
+    add_to_common_env("GATEWAY_INTERFACE", CGI_VERSION);
+    add_to_common_env("SERVER_PORT", simple_itoa(server_port));
     /* NCSA and APACHE added -- not in CGI spec */
 #ifdef USE_NCSA_CGI_ENV
-    common_cgi_env[common_cgi_env_count++] =
-        env_gen_extra("DOCUMENT_ROOT", document_root, 0);
-
+    add_to_common_env("DOCUMENT_ROOT", document_root);
     /* NCSA added */
-    common_cgi_env[common_cgi_env_count++] = env_gen_extra("SERVER_ROOT", server_root, 0);
+    add_to_common_env("SERVER_ROOT", server_root);
 #endif
-
     /* APACHE added */
-    common_cgi_env[common_cgi_env_count++] = env_gen_extra("SERVER_ADMIN", server_admin, 0);
-    common_cgi_env[common_cgi_env_count] = NULL;
-
-    /* Sanity checking -- make *sure* the memory got allocated */
-    if (common_cgi_env_count != COMMON_CGI_COUNT) {
-        log_error_time();
-        fprintf(stderr, "COMMON_CGI_COUNT not high enough.\n");
-        exit(EXIT_FAILURE);
-    }
-
-    for (i = 0; i < common_cgi_env_count; ++i) {
-        if (common_cgi_env[i] == NULL) {
-            log_error_time();
-            fprintf(stderr,
-                    "Unable to allocate a component of common_cgi_env - out of memory.\n");
-            exit(EXIT_FAILURE);
-        }
-    }
+    add_to_common_env("SERVER_ADMIN", server_admin);
 }
 
 void add_to_common_env(char *key, char *value)
 {
     common_cgi_env = realloc(common_cgi_env, (common_cgi_env_count + 2) * (sizeof(char *)));
+    /* +1 for the new one and +1 for the NULL */
     if (common_cgi_env== NULL) {
         DIE("Unable to allocate memory for common CGI environment variable.");
     }
