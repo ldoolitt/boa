@@ -21,8 +21,6 @@
  */
 
 
-#include "config.h"
-
 /* Highest character number that can possibly be passed through un-escaped */
 #define NEEDS_ESCAPE_BITS 128
 
