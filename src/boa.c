@@ -2,7 +2,7 @@
  *  Boa, an http server
  *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
  *  Some changes Copyright (C) 1996 Charles F. Randall <crandall@goldsys.com>
- *  Copyright (C) 1996-1999 Larry Doolittle <ldoolitt@boa.org>
+ *  Copyright (C) 1996-2005 Larry Doolittle <ldoolitt@boa.org>
  *  Copyright (C) 1996-2005 Jon Nelson <jnelson@boa.org>
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -149,6 +149,25 @@ static void usage(const char *programname)
 
 }
 
+void do_chroot(const char *root)
+{
+    if (chdir(root) == -1) {
+        log_error_time();
+        perror("chdir (to chroot)");
+        exit(EXIT_FAILURE);
+    }
+    if (chroot(root) == -1) {
+        log_error_time();
+        perror("chroot");
+        exit(EXIT_FAILURE);
+    }
+    if (chdir("/") == -1) {
+        log_error_time();
+        perror("chdir (after chroot)");
+        exit(EXIT_FAILURE);
+    }
+}
+
 static void parse_commandline(int argc, char *argv[])
 {
     int c;                      /* command line arg */
@@ -171,21 +190,7 @@ static void parse_commandline(int argc, char *argv[])
             config_file_name = optarg;
             break;
         case 'r':
-            if (chdir(optarg) == -1) {
-                log_error_time();
-                perror("chdir (to chroot)");
-                exit(EXIT_FAILURE);
-            }
-            if (chroot(optarg) == -1) {
-                log_error_time();
-                perror("chroot");
-                exit(EXIT_FAILURE);
-            }
-            if (chdir("/") == -1) {
-                log_error_time();
-                perror("chdir (after chroot)");
-                exit(EXIT_FAILURE);
-            }
+            do_chroot(optarg); /* exits on failure */
             break;
 #ifndef DISABLE_DEBUG
         case 'l':
@@ -238,8 +243,13 @@ static int create_server_socket(void)
 
 static void drop_privs(void)
 {
+    uid_t current_uid;
+
+    /* this function is always successful */
+    current_uid = getuid();
+
     /* give away our privs if we can */
-    if (getuid() == 0) {
+    if (current_uid == 0) {
         struct passwd *passwdbuf;
         passwdbuf = getpwuid(server_uid);
         if (passwdbuf == NULL) {
@@ -264,11 +274,12 @@ static void drop_privs(void)
         if (server_gid || server_uid) {
             log_error_time();
             fprintf(stderr, "Warning: "
-                    "Not running as root: no attempt to change"
-                    " to uid %u gid %u\n", server_uid, server_gid);
+                    "Not running as root (current uid: %d): no attempt to change"
+                    " to uid %u gid %u\n",
+                    current_uid, server_uid, server_gid);
         }
-        server_gid = getgid();
-        server_uid = getuid();
+        server_gid = getgid(); /* always successful */
+        server_uid = current_uid;
     }
 }
 
