@@ -56,6 +56,9 @@ void dump_alias(void);
 /* boa.c */
 void do_chroot(const char *root);
 
+/* cgi_header */
+int process_cgi_header(request * req);
+
 /* config */
 void read_config_files(void);
 
@@ -199,7 +202,6 @@ void release_mmap(struct mmap_entry *e);
 
 /* sublog */
 int open_gen_fd(const char *spec);
-int process_cgi_header(request * req);
 
 /* pipe */
 int read_from_pipe(request * req);
