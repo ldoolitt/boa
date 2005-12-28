@@ -29,7 +29,7 @@
  noescape = unreserved | ":" | "@" | "&" | "=" | "+" | "$" | "," | "/"
  */
 
-#ifdef TEST
+#ifdef TESTING
 #include <stdio.h>
 #include <stdlib.h>
 #else
@@ -186,7 +186,7 @@ char *http_escape_string(const char *inp, char *buf,
 
 
 
-#ifdef TEST
+#ifdef TESTING
 int main(void)
 {
     int i;
