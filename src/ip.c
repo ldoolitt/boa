@@ -54,12 +54,12 @@ int bind_server(int sock, char *ip, unsigned int port)
     struct sockaddr_in6 server_sockaddr;
     server_sockaddr.sin6_family = PF_INET6;
     memcpy(&server_sockaddr.sin6_addr, &in6addr_any, sizeof (in6addr_any));
-    server_sockaddr.sin6_port = htons(server_port);
+    server_sockaddr.sin6_port = htons(port);
 #else
     struct sockaddr_in server_sockaddr;
-    memset(&server_sockaddr, 0, sizeof server_sockaddr);
+    memset(&server_sockaddr, 0, sizeof(server_sockaddr));
 #ifdef HAVE_SIN_LEN             /* uncomment for BSDs */
-    server_sockaddr.sin_len = sizeof server_sockaddr;
+    server_sockaddr.sin_len = sizeof(server_sockaddr);
 #endif
     server_sockaddr.sin_family = PF_INET;
     if (ip != NULL) {
