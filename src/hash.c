@@ -4,6 +4,8 @@
  *  Copyright (C) 1996-1999 Larry Doolittle <ldoolitt@boa.org>
  *  Copyright (C) 1997-2004 Jon Nelson <jnelson@boa.org>
  *
+ *  The fnv1a hash is under no copyright, it is in the public domain.
+ *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation; either version 1, or (at your option)
@@ -154,10 +156,6 @@ static unsigned djb2_hash(const char *str)
  */
 #define OFFSET_BASIS 2166136261U
 #define FNV_PRIME 16777619U
-/*
- *
- * hash.c:152: warning: width of integer constant may change on other systems with -traditional
- */
 
 static unsigned fnv1a_hash(const char *str)
 {
