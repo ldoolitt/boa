@@ -186,7 +186,7 @@ struct request {                /* pending requests */
     char buffer[BUFFER_SIZE + 1]; /* generic I/O buffer */
     char request_uri[MAX_HEADER_LENGTH + 1]; /* uri */
     char client_stream[CLIENT_STREAM_SIZE]; /* data from client - fit or be hosed */
-    char *cgi_env[CGI_ENV_MAX + 4]; /* CGI environment */
+    char *cgi_env[CGI_ENV_MAX]; /* CGI environment */
 
 #ifdef ACCEPT_ON
     char accept[MAX_ACCEPT_LENGTH]; /* Accept: fields */
