@@ -40,12 +40,12 @@ int req_write(request * req, const char *msg)
     if (!msg_len || req->status > DONE)
         return req->buffer_end;
 
-    if (req->buffer_end + msg_len > BUFFER_SIZE) {
+    if (req->buffer_end + msg_len > sizeof(req->buffer)) {
         log_error_doc(req);
         fprintf(stderr, "There is not enough room in the buffer to"
                 " copy %u bytes (%ld available). Shutting down connection.\n",
                 msg_len,
-                BUFFER_SIZE - req->buffer_end);
+                sizeof(req->buffer) - req->buffer_end);
 #ifdef FASCIST_LOGGING
         *(req->buffer + req->buffer_end) = '\0';
         fprintf(stderr, "The request looks like this:\n%s\n",
@@ -81,7 +81,7 @@ int req_write_escape_http(request * req, const char *msg)
     dest = req->buffer + req->buffer_end;
     /* 3 is a guard band, since we don't check the destination pointer
      * in the middle of a transfer of up to 3 bytes */
-    left = BUFFER_SIZE - req->buffer_end;
+    left = sizeof(req->buffer) - req->buffer_end;
     while ((c = *inp++) && left >= 3) {
         if (needs_escape((unsigned int) c)) {
             *dest++ = '%';
@@ -132,7 +132,7 @@ int req_write_escape_html(request * req, const char *msg)
     /* 6 is a guard band, since we don't check the destination pointer
      * in the middle of a transfer of up to 6 bytes
      */
-    left = BUFFER_SIZE - req->buffer_end;
+    left = sizeof(req->buffer) - req->buffer_end;
     while ((c = *inp++) && left >= 6) {
         switch (c) {
         case '>':

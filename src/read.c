@@ -225,8 +225,8 @@ int read_header(request * req)
         /* only reached if request is split across more than one packet */
         unsigned int buf_bytes_left;
 
-        buf_bytes_left = CLIENT_STREAM_SIZE - req->client_stream_pos;
-        if (buf_bytes_left < 1 || buf_bytes_left > CLIENT_STREAM_SIZE) {
+        buf_bytes_left = sizeof(req->client_stream) - req->client_stream_pos;
+        if (buf_bytes_left < 1 || buf_bytes_left > sizeof(req->client_stream)) {
             log_error_doc(req);
             fputs("No space left in client stream buffer, closing\n",
                   stderr);
@@ -316,7 +316,7 @@ int read_body(request * req)
     int bytes_read;
     unsigned int bytes_to_read, bytes_free;
 
-    bytes_free = BUFFER_SIZE - (req->header_end - req->header_line);
+    bytes_free = sizeof(req->buffer) - (req->header_end - req->header_line);
     bytes_to_read = req->filesize - req->filepos;
 
     if (bytes_to_read > bytes_free)

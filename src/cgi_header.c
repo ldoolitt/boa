@@ -153,7 +153,7 @@ int process_cgi_header(request * req)
         }
         howmuch = req->header_end - req->header_line;
 
-        if (dest + howmuch > req->buffer + BUFFER_SIZE) {
+        if (dest + howmuch > req->buffer + sizeof(req->buffer)) {
             /* big problem */
             log_error_doc(req);
             fprintf(stderr, "Too much data to move! Aborting! %s %d\n",

@@ -39,7 +39,7 @@ int read_from_pipe(request * req)
     int bytes_read; /* signed */
     unsigned int bytes_to_read; /* unsigned */
 
-    bytes_to_read = BUFFER_SIZE - (req->header_end - req->buffer - 1);
+    bytes_to_read = sizeof(req->buffer) - (req->header_end - req->buffer - 1);
 
     if (bytes_to_read == 0) {   /* buffer full */
         if (req->cgi_status == CGI_PARSE) { /* got+parsed header */
@@ -273,7 +273,7 @@ int io_shuffle(request * req)
      * because the ranges are verified against the filesize,
      * and we cap bytes_to_read at bytes_to_write.
      */
-    bytes_to_read = BUFFER_SIZE - req->buffer_end - 256;
+    bytes_to_read = sizeof(req->buffer) - req->buffer_end - 256;
 
     bytes_to_write = (req->ranges->stop - req->ranges->start) + 1;
 

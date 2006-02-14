@@ -682,7 +682,7 @@ int init_cgi(request * req)
             req->cgi_status = CGI_PARSE; /* got to parse cgi header */
             /* for cgi_header... I get half the buffer! */
             req->header_line = req->header_end =
-                (req->buffer + BUFFER_SIZE / 2);
+                (req->buffer + sizeof(req->buffer) / 2);
         } else {
             req->cgi_status = CGI_BUFFER;
             /* I get all the buffer! */
