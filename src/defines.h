@@ -178,4 +178,5 @@ extern int debug_level;
 #define EXIT_FAILURE 1
 #endif
 
-#endif
+#endif /* _DEFINES_H */
+
