@@ -180,9 +180,6 @@ int io_shuffle_sendfile(request * req)
     /* XXX trouble if range is exactly 4G on a 32-bit machine? */
     bytes_to_write = (req->ranges->stop - req->ranges->start) + 1;
 
-    if (bytes_to_write > system_bufsize)
-        bytes_to_write = system_bufsize;
-
 retrysendfile:
     if (bytes_to_write == 0) {
         /* shouldn't get here, but... */
@@ -241,7 +238,7 @@ retrysendfile:
 
     /* sendfile automatically updates req->ranges->start
      * don't touch!
-     * req->ranges->start += bytes_written;
+     * sendfile does this: req->ranges->start += bytes_written;
      */
     req->bytes_written += bytes_written;
 
