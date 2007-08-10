@@ -51,7 +51,6 @@ int init_get(request * req)
 {
     int data_fd, saved_errno;
     struct stat statbuf;
-    volatile unsigned int bytes_free;
 
     data_fd = open(req->pathname, O_RDONLY);
     saved_errno = errno;        /* might not get used */
@@ -303,12 +302,16 @@ int init_get(request * req)
      */
     /* IF we have range data *and* no if-range or if-range matches... */
 
+#ifdef HAVE_SENDFILE
+    req->data_fd = data_fd;
+    req->status = IOSHUFFLE;
+#else
 #ifdef MAX_FILE_MMAP
     if (req->filesize > MAX_FILE_MMAP) {
         req->data_fd = data_fd;
         req->status = IOSHUFFLE;
+#endif /* MAX_FILE_MMAP */
     } else
-#endif
     {
         /* NOTE: I (Jon Nelson) tried performing a read(2)
          * into the output buffer provided the file data would
@@ -325,6 +328,7 @@ int init_get(request * req)
             close(data_fd);             /* close data file */
         }
     }
+#endif /* HAVE_SENDFILE */
 
     if (!req->ranges) {
         req->ranges = range_pool_pop();
@@ -356,63 +360,6 @@ int init_get(request * req)
         }
     }
 
-    if (req->method == M_HEAD) {
-        return complete_response(req);
-    }
-
-    bytes_free = 0;
-    if (req->data_mem) {
-        /* things can really go tilt if req->buffer_end > BUFFER_SIZE,
-         * but basically that can't happen
-         */
-
-        /* We lose statbuf here, so make sure response has been sent */
-        bytes_free = BUFFER_SIZE - req->buffer_end;
-        /* 256 bytes for the **trailing** headers */
-
-        /* bytes is now how much the buffer can hold
-         * after the headers
-         */
-    }
-
-    if (req->data_mem && bytes_free > 256) {
-        unsigned int want;
-        Range *r;
-
-        r = req->ranges;
-
-        want = (r->stop - r->start) + 1;
-
-        if (bytes_free > want)
-            bytes_free = want;
-        else {
-            /* bytes_free <= want */
-            ;
-        }
-
-        if (setjmp(env) == 0) {
-            handle_sigbus = 1;
-            memcpy(req->buffer + req->buffer_end,
-                   req->data_mem + r->start, bytes_free);
-            handle_sigbus = 0;
-            /* OK, SIGBUS **after** this point is very bad! */
-        } else {
-            /* sigbus! */
-            log_error_doc(req);
-            reset_output_buffer(req);
-            send_r_error(req);
-            log_error("Got SIGBUS in memcpy\n");
-            return 0;
-        }
-        req->buffer_end += bytes_free;
-        req->bytes_written += bytes_free;
-        r->start += bytes_free;
-        if (bytes_free == want) {
-            /* this will fit due to the 256 extra bytes_free */
-            return complete_response(req);
-        }
-    }
-
     /* We lose statbuf here, so make sure response has been sent */
     return 1;
 }
@@ -437,9 +384,6 @@ int process_get(request * req)
     }
 
     bytes_to_write = (req->ranges->stop - req->ranges->start) + 1;
-
-    if (bytes_to_write > system_bufsize)
-        bytes_to_write = system_bufsize;
 
     if (setjmp(env) == 0) {
         handle_sigbus = 1;
