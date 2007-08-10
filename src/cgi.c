@@ -336,6 +336,30 @@ static void create_argv(request * req, char **aargv)
     }
 }
 
+static void close_all(void) {
+    /* for every req, close req->fd */
+    request *todo[] = { request_ready, request_block, NULL };
+    short i;
+    request *req;
+
+    for(i = 0; todo[i]; ++i) {
+      req = todo[i];
+      while(req) {
+        if (req->fd) {
+          if (close(req->fd) < 0) {
+            DIE("failure in close(2)");
+          }
+        }
+        if (req->post_data_fd) {
+          if (close(req->post_data_fd) < 0) {
+            DIE("failure in close(2)");
+          }
+        }
+        req = req->next;
+      }
+    }
+}
+
 /*
  * Name: init_cgi
  *
@@ -411,6 +435,7 @@ int init_cgi(request * req)
     case 0:
         /* child */
         reset_signals();
+        close_all();
 
         if (req->cgi_type == CGI || req->cgi_type == NPH) {
             char *c;
