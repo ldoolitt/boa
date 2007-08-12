@@ -350,6 +350,11 @@ static void close_others(request *this_req) {
             DIE("failure in close(2)");
           }
         }
+        if (req->data_fd) {
+          if (close(req->data_fd) < 0) {
+            DIE("failure in close(2)");
+          }
+        }
         if (req->post_data_fd) {
           if (close(req->post_data_fd) < 0) {
             DIE("failure in close(2)");
