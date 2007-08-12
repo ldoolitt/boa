@@ -27,7 +27,7 @@
 #include "boa.h"
 
 static void range_abort(request * req);
-static void range_add(request * req, unsigned long start, unsigned long stop);
+static void range_add(request * req, off_t start, off_t stop);
 static Range *range_pool = NULL;
 
 void ranges_reset(request * req)
@@ -87,7 +87,7 @@ static void range_abort(request * req)
     req->ranges->stop = -1;
 }
 
-static void range_add(request * req, unsigned long start, unsigned long stop)
+static void range_add(request * req, off_t start, off_t stop)
 {
     Range *prev;
     Range *r = range_pool_pop();
@@ -153,7 +153,7 @@ int ranges_fixup(request * req)
         /* no stop range specified or stop is too big.
          * RFC says it gets req->filesize - 1
          */
-        if (r->stop == (unsigned) -1 || r->stop >= req->filesize) {
+        if (r->stop == (off_t) -1 || r->stop >= req->filesize) {
             /* r->start is *not* -1 */
             r->stop = req->filesize - 1;
         }
@@ -168,7 +168,7 @@ int ranges_fixup(request * req)
          * RFC says it gets filesize - stop.
          * Stop is already valid from a filesize point of view.
          */
-        if ((long) r->start == -1) {
+        if (r->start == (off_t) -1) {
             /* last N bytes of the entity body.
              * r->stop contains is N
              * due to the above test we are guaranteed
@@ -277,7 +277,7 @@ int range_parse(request * req, const char *str)
 #define null 4
 #define other 5
         int ccode;
-        unsigned long start = 0, stop = 0;
+        off_t start = 0, stop = 0;
 
 #define ACTMASK1 (0xE0)
 #define PB  (0x20)              /* Push Beginning */
@@ -355,7 +355,7 @@ int range_parse(request * req, const char *str)
                 range_abort(req);
                 return 0;
             } else if ((fcode & ACTMASK2) == SR) {
-                if ((start == stop) && (start == (unsigned) -1)) {
+                if ((start == stop) && (start == (off_t) -1)) {
                     /* neither was specified, or they were very big. */
                     log_error_doc(req);
                     log_error_time();

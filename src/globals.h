@@ -93,8 +93,8 @@ enum CGI_TYPE { NPH = 1, CGI };
 
 /**************** STRUCTURES ****************************/
 struct range {
-    unsigned long start;
-    unsigned long stop;
+    off_t start;
+    off_t stop;
     struct range *next;
 };
 
