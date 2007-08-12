@@ -23,7 +23,8 @@
 #ifndef _BOA_H
 #define _BOA_H
 
-#include "config.h"
+#include "compat.h"             /* oh what fun is porting */
+/* compat includes config.h */
 #include <errno.h>
 #include <stdlib.h>             /* malloc, free, etc. */
 #include <stdio.h>              /* stdin, stdout, stderr */
@@ -44,7 +45,6 @@
 #include <sys/socket.h>         /* socket, bind, accept, setsockopt, */
 #include <sys/stat.h>           /* open */
 
-#include "compat.h"             /* oh what fun is porting */
 #include "defines.h"
 #include "globals.h"
 
