@@ -30,7 +30,7 @@ struct access_node {
     enum access_type type;
 };
 
-static int n_access;
+static unsigned int n_access;
 
 static struct access_node *nodes = NULL;
 
@@ -38,7 +38,7 @@ static void access_shutdown(void);
 
 static void access_shutdown(void)
 {
-    int i;
+    unsigned int i;
 
     if (nodes) {
         for (i = 0; i < n_access; i++) {
@@ -80,7 +80,7 @@ void access_add(const char *pattern, enum access_type type)
 
 enum access_type access_allow(const char *file)
 {
-    int i;
+    unsigned int i;
 
     /* find first match in allow / deny rules */
     for (i = 0; i < n_access; i++) {
