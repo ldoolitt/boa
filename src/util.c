@@ -146,9 +146,8 @@ char *get_commonlog_time(void)
 {
     struct tm *t;
     char *p;
-    unsigned int a;
     static char buf[30];
-    int time_offset;
+    time_t time_offset, a;
 
     if (use_localtime) {
         t = localtime(&current_time);
@@ -501,7 +500,7 @@ void rfc822_time_buf(char *buf, time_t s)
     memcpy(p, day_tab + t->tm_wday * 4, 4);
 }
 
-char *simple_itoa(unsigned int i)
+char *simple_itoa(uint64_t i)
 {
     /* 21 digits plus null terminator, good for 64-bit or smaller ints
      * for bigger ints, use a bigger buffer!
@@ -535,7 +534,7 @@ int boa_atoi(const char *s)
     if (retval < 0)
         return -1;
 
-    reconv = simple_itoa((unsigned int) retval);
+    reconv = simple_itoa((uint64_t) retval);
     if (memcmp(s, reconv, strlen(s)) != 0) {
         return -1;
     }
