@@ -36,6 +36,18 @@
 
 /* #define QUIET_DISCONNECT 1 */
 
+/*
+#define TUNE_SNDBUF
+#define USE_TCPNODELAY
+#define NO_RATE_LIMIT
+#define DIE_ON_ERROR_TUNING_SNDBUF
+
+#ifdef TUNE_SNDBUF
+#define SOCKETBUF_SIZE                          32768
+#endif
+
+*/
+
 /***** Change this via the CGIPath configuration value in boa.conf *****/
 #define DEFAULT_PATH     "/bin:/usr/bin:/usr/local/bin"
 
@@ -48,7 +60,6 @@
 
 /***** Various stuff that you may want to tweak, but probably shouldn't *****/
 
-#define SOCKETBUF_SIZE                          32768
 #define CLIENT_STREAM_SIZE                      8192
 #define BUFFER_SIZE                             4096
 #define MAX_HEADER_LENGTH			1024

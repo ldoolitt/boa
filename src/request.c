@@ -24,13 +24,6 @@
 #include "boa.h"
 #include <stddef.h>             /* for offsetof */
 
-#define TUNE_SNDBUF
-/*
-#define USE_TCPNODELAY
-#define NO_RATE_LIMIT
-#define DIE_ON_ERROR_TUNING_SNDBUF
-*/
-
 unsigned total_connections = 0;
 unsigned int system_bufsize = 0; /* Default size of SNDBUF given by system */
 struct status status;
