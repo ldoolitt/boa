@@ -505,11 +505,13 @@ char *simple_itoa(uint64_t i)
     /* 21 digits plus null terminator, good for 64-bit or smaller ints
      * for bigger ints, use a bigger buffer!
      *
-     * 4294967295 is, incidentally, MAX_UINT (on 32bit systems at this time)
+     * 4294967295 is, incidentally, ULONG_MAX (32 bit)
      * and is 10 bytes long
+     * 18446744073709551615 is ULONG_MAX (64 bit) (20 digits)
+     * thus, we need 19 digits + NUL = 20 bytes
      */
     static char local[22];
-    char *p = &local[21];
+    char *p = &local[sizeof(local) - 1];
     *p = '\0';
     do {
         *--p = '0' + i % 10;
