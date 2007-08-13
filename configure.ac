@@ -66,12 +66,10 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 dnl Checks for library functions.
 AC_FUNC_FNMATCH
 AC_FUNC_MEMCMP
-AC_FUNC_MMAP
 AC_FUNC_SETVBUF_REVERSED
 AC_CHECK_FUNCS(getcwd strdup strstr strcspn strtol)
 AC_CHECK_FUNCS(gethostname gethostbyname socket inet_aton inet_addr)
 AC_CHECK_FUNCS(scandir alphasort)
-AC_CHECK_FUNCS(madvise)
 
 AC_CHECK_STRUCT_FOR([
 #if TIME_WITH_SYS_TIME
@@ -155,6 +153,27 @@ if test -n "$GCC"; then
     AC_MSG_RESULT(no)
   ])
 fi
+
+AC_MSG_CHECKING(wheather to enable mmap support)
+AC_ARG_ENABLE(mmap,
+[  --disable-mmap          Disable use of mmap],
+[
+ if test "$enableval" = "yes" ; then
+    AC_MSG_RESULT(yes)
+    AC_FUNC_MMAP
+    AC_CHECK_FUNCS(madvise)
+    AC_DEFINE_UNQUOTED(ENABLE_MMAP)
+    AC_DEFINE(ENABLE_MMAP,1,[Define if user has enabled mmap])
+  else
+    AC_MSG_RESULT(no)
+  fi
+],
+[
+    AC_MSG_RESULT(yes)
+    AC_FUNC_MMAP
+    AC_CHECK_FUNCS(madvise)
+    AC_DEFINE(ENABLE_MMAP,1,[Define if user has enabled mmap])
+])
 
 AC_MSG_CHECKING(whether to enable gunzip support)
 AC_ARG_ENABLE(gunzip,
