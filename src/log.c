@@ -145,7 +145,7 @@ void log_access(request * req)
     } else if (vhost_root) {
         printf("%s ", (req->host ? req->host : "(null)"));
     }
-    printf("%s - - %s\"%s\" %d %ld \"%s\" \"%s\"\n",
+    printf("%s - - %s\"%s\" %d " OFF_T_FORMAT " \"%s\" \"%s\"\n",
            req->remote_ip_addr,
            get_commonlog_time(),
            req->logline ? req->logline : "-",

@@ -93,7 +93,8 @@ static void range_add(request * req, off_t start, off_t stop)
     Range *r = range_pool_pop();
 
     DEBUG(DEBUG_RANGE) {
-        fprintf(stderr, "range.c, range_add: got: %lu-%lu\n", start, stop);
+        fprintf(stderr, "range.c, range_add: got: "
+                OFF_T_FORMAT "-" OFF_T_FORMAT "\n", start, stop);
     }
 
     for(prev = req->ranges;prev;prev = prev->next) {
@@ -147,7 +148,9 @@ int ranges_fixup(request * req)
          * 5) start > stop && start != -1 :: invalid
          */
         DEBUG(DEBUG_RANGE) {
-            fprintf(stderr, "range.c: ranges_fixup: %lu-%lu\n", r->start, r->stop);
+            fprintf(stderr, "range.c: ranges_fixup: "
+                    OFF_T_FORMAT "-" OFF_T_FORMAT "\n",
+                    r->start, r->stop);
         }
 
         /* no stop range specified or stop is too big.
@@ -188,7 +191,7 @@ int ranges_fixup(request * req)
         /* since start <= stop and stop < filesize,
          * start < filesize
          */
-        if ((long) r->start < 0 || r->start > r->stop) {
+        if (r->start < 0 || r->start > r->stop) {
             Range *temp;
 
             temp = r;
@@ -206,7 +209,9 @@ int ranges_fixup(request * req)
         /* r->stop and r->start may be the same, however */
 
         DEBUG(DEBUG_RANGE) {
-            fprintf(stderr, "ending with start: %lu\tstop: %lu\n", r->start, r->stop);
+            fprintf(stderr, "ending with start: "
+                    OFF_T_FORMAT "\tstop: " OFF_T_FORMAT "\n",
+                    r->start, r->stop);
         }
 
         if (prev == NULL)

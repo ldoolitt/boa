@@ -127,8 +127,8 @@ int read_from_pipe(request * req)
 
 int write_from_pipe(request * req)
 {
-    int bytes_written;
-    size_t bytes_to_write = req->header_end - req->header_line;
+    size_t bytes_written;
+    off_t bytes_to_write = req->header_end - req->header_line;
 
     if (bytes_to_write == 0) {
         if (req->cgi_status == CGI_DONE)
@@ -158,7 +158,7 @@ int write_from_pipe(request * req)
     req->bytes_written += bytes_written;
 
     /* if there won't be anything to write next time, switch state */
-    if ((unsigned) bytes_written == bytes_to_write) {
+    if ((off_t) bytes_written == bytes_to_write) {
         req->status = PIPE_READ;
         req->header_end = req->header_line = req->buffer;
     }
@@ -256,8 +256,9 @@ retrysendfile:
 
 int io_shuffle(request * req)
 {
-    int bytes_to_read;
-    int bytes_written, bytes_to_write;
+    size_t bytes_to_read;
+    ssize_t bytes_written;
+    off_t bytes_to_write;
 
     if (req->method == M_HEAD) {
         return complete_response(req);

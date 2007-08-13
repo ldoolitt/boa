@@ -23,6 +23,8 @@ fi
 AC_SUBST(ALLSOURCES)
 AC_SUBST(MAKE)
 
+AC_SYS_LARGEFILE
+
 dnl AC_MSG_RESULT($host) dnl i686-pc-linux-gnu
 dnl AC_MSG_RESULT($host_cpu) dnl i686
 dnl AC_MSG_RESULT($host_vendor) dnl pc

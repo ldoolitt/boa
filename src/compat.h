@@ -24,7 +24,16 @@
 #ifndef _COMPAT_H
 #define _COMPAT_H
 
+/* config.h *must* be the first include! */
 #include "config.h"
+
+#if _FILE_OFFSET_BITS==64
+#define OFF_T_FORMAT "%llu"
+#elif _FILE_OFFSET_BITS>64
+#error Too many bits in file offset.
+#else
+#define OFF_T_FORMAT "%lu"
+#endif
 
 #ifdef HAVE_POLL
 #include <sys/poll.h>

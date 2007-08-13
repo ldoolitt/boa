@@ -581,7 +581,7 @@ static int get_cachedir_file(request * req, struct stat *statbuf)
      * include the NUL when calculating if the size is enough
      */
     snprintf(pathname_with_index, sizeof(pathname_with_index),
-             "%s/dir.%d.%ld", cachedir,
+             "%s/dir.%d." OFF_T_FORMAT, cachedir,
              (int) statbuf->st_dev, statbuf->st_ino);
     data_fd = open(pathname_with_index, O_RDONLY);
 
