@@ -25,15 +25,22 @@
 #define _GLOBALS_H
 
 /********************** METHODS **********************/
-enum HTTP_METHOD { M_GET = 1, M_HEAD, M_PUT, M_POST,
-    M_DELETE, M_LINK, M_UNLINK, M_MOVE, M_TRACE
+enum HTTP_METHOD {
+    M_GET = 1, M_HEAD,
+    M_PUT, M_POST,
+    M_DELETE,
+    M_LINK,
+    M_UNLINK,
+    M_MOVE,
+    M_TRACE
 };
 
 /******************* HTTP VERSIONS *******************/
 enum HTTP_VERSION { HTTP09=1, HTTP10, HTTP11 };
 
 /************** REQUEST STATUS (req->status) ***************/
-enum REQ_STATUS { READ_HEADER, ONE_CR, ONE_LF, TWO_CR,
+enum REQ_STATUS {
+    READ_HEADER, ONE_CR, ONE_LF, TWO_CR,
     BODY_READ, BODY_WRITE,
     WRITE,
     PIPE_READ, PIPE_WRITE,
@@ -44,40 +51,42 @@ enum REQ_STATUS { READ_HEADER, ONE_CR, ONE_LF, TWO_CR,
 };
 
 /******************* RESPONSE CODES ******************/
-enum RESPONSE_CODE { R_CONTINUE = 100,
-                     R_REQUEST_OK = 200,
-                     R_CREATED,
-                     R_ACCEPTED,
-                     R_PROVISIONAL,
-                     R_NO_CONTENT,
-                     R_205,
-                     R_PARTIAL_CONTENT,
-                     R_MULTIPLE = 300,
-                     R_MOVED_PERM,
-                     R_MOVED_TEMP,
-                     R_303,
-                     R_NOT_MODIFIED,
-                     R_BAD_REQUEST = 400,
-                     R_UNAUTHORIZED,
-                     R_PAYMENT,
-                     R_FORBIDDEN,
-                     R_NOT_FOUND,
-                     R_METHOD_NA, /* method not allowed */
-                     R_NON_ACC,   /* non acceptable */
-                     R_PROXY,     /* proxy auth required */
-                     R_REQUEST_TO, /* request timeout */
-                     R_CONFLICT,
-                     R_GONE,
-                     R_LENGTH_REQUIRED,
-                     R_PRECONDITION_FAILED,
-                     R_REQUEST_URI_TOO_LONG = 414,
-                     R_INVALID_RANGE = 416,
-                     R_ERROR = 500,
-                     R_NOT_IMP,
-                     R_BAD_GATEWAY,
-                     R_SERVICE_UNAV,
-                     R_GATEWAY_TO, /* gateway timeout */
-                     R_BAD_VERSION };
+enum RESPONSE_CODE {
+    R_CONTINUE = 100,
+    R_REQUEST_OK = 200,
+    R_CREATED,
+    R_ACCEPTED,
+    R_PROVISIONAL,
+    R_NO_CONTENT,
+    R_205,
+    R_PARTIAL_CONTENT,
+    R_MULTIPLE = 300,
+    R_MOVED_PERM,
+    R_MOVED_TEMP,
+    R_303,
+    R_NOT_MODIFIED,
+    R_BAD_REQUEST = 400,
+    R_UNAUTHORIZED,
+    R_PAYMENT,
+    R_FORBIDDEN,
+    R_NOT_FOUND,
+    R_METHOD_NA, /* method not allowed */
+    R_NON_ACC,   /* non acceptable */
+    R_PROXY,     /* proxy auth required */
+    R_REQUEST_TO, /* request timeout */
+    R_CONFLICT,
+    R_GONE,
+    R_LENGTH_REQUIRED,
+    R_PRECONDITION_FAILED,
+    R_REQUEST_URI_TOO_LONG = 414,
+    R_INVALID_RANGE = 416,
+    R_ERROR = 500,
+    R_NOT_IMP,
+    R_BAD_GATEWAY,
+    R_SERVICE_UNAV,
+    R_GATEWAY_TO, /* gateway timeout */
+    R_BAD_VERSION
+};
 
 /************* ALIAS TYPES (aliasp->type) ***************/
 enum ALIAS { ALIAS, SCRIPTALIAS, REDIRECT };
