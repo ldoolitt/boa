@@ -53,6 +53,9 @@ void add_alias(const char *fakename, const char *realname, enum ALIAS type);
 int translate_uri(request * req);
 void dump_alias(void);
 
+/* boa.c */
+void do_chroot(const char *root);
+
 /* config */
 void read_config_files(void);
 

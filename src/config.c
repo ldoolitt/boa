@@ -70,7 +70,7 @@ extern int cgi_rlimit_data;     /* boa.c */
 extern int cgi_nice;            /* boa.c */
 #endif
 
-/* These are new */
+static void c_do_chroot(char *v1, char *v2, void *t);
 static void c_add_cgi_env(char *v1, char *v2, void *table_ptr);
 static void c_set_user(char *v1, char *v2, void *t);
 static void c_set_group(char *v1, char *v2, void *t);
@@ -162,7 +162,13 @@ static struct ccommand clist[] = {
     {"CGINice", S2A, c_set_int, &cgi_nice},
 #endif
     {"CGIEnv", S2A, c_add_cgi_env, NULL},
+    {"Chroot", S1A, c_do_chroot, NULL},
 };
+
+static void c_do_chroot(char *v1, char *v2, void *t)
+{
+    do_chroot(v1); /* does not return on failure */
+}
 
 static void c_add_cgi_env(char *v1, char *v2, void *t)
 {
