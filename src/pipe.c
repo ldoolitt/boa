@@ -169,9 +169,8 @@ int write_from_pipe(request * req)
 #ifdef HAVE_SENDFILE
 int io_shuffle_sendfile(request * req)
 {
-    int bytes_written;
-    size_t bytes_to_write;
-    off_t sendfile_offset;
+    ssize_t bytes_written;
+    off_t sendfile_offset, bytes_to_write;
 
     if (req->method == M_HEAD) {
         return complete_response(req);
@@ -217,15 +216,12 @@ retrysendfile:
                 goto retrysendfile;
             } else {
                 req->status = DEAD;
-#ifdef QUIET_DISCONNECT
-                if (0)
-#else
-                if (errno != EPIPE && errno != ECONNRESET)
-#endif
-                {
+#ifndef QUIET_DISCONNECT
+                if (errno != EPIPE && errno != ECONNRESET) {
                     log_error_doc(req);
                     perror("sendfile write");
                 }
+#endif
             }
             return 0;
         } else if (bytes_written == 0) {
