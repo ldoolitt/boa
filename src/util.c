@@ -827,3 +827,17 @@ void parse_debug(char *foo)
             debug_level);
 }
 #endif
+
+#ifndef HAVE_PREAD
+ssize_t pread(int fd, void *buf, size_t count, off_t offset)
+{
+    off_t temp;
+
+    temp = lseek(fd, offset, SEEK_SET);
+    if (temp < 0) {
+        return temp;
+    }
+    return read(fd, buf, count);
+}
+#endif /* HAVE_PREAD */
+

@@ -282,20 +282,10 @@ int io_shuffle(request * req)
 
     if (bytes_to_read > 0 && req->data_fd) {
         int bytes_read;
-        off_t temp;
-
-        temp = lseek(req->data_fd, req->ranges->start, SEEK_SET);
-        if (temp < 0) {
-            req->status = DEAD;
-            log_error_doc(req);
-            perror("ioshuffle lseek");
-            return 0;
-        }
-
       restartread:
         bytes_read =
-            read(req->data_fd, req->buffer + req->buffer_end,
-                 bytes_to_read);
+            pread(req->data_fd, req->buffer + req->buffer_end,
+                 bytes_to_read, req->ranges->start);
 
         if (bytes_read == -1) {
             if (errno == EINTR) {
@@ -344,13 +334,17 @@ int io_shuffle(request * req)
     if (bytes_written == -1) {
         if (errno == EWOULDBLOCK || errno == EAGAIN)
             return -1;          /* request blocked at the pipe level, but keep going */
-        else if (errno == EINTR)
+        else if (errno == EPIPE) {
+            /* no one cares */
+            req->status = DEAD;
+            return 0;
+        } else if (errno == EINTR)
             goto restartwrite;
         else {
             req->status = DEAD;
             log_error_doc(req);
             perror("ioshuffle write");
-            return 0;
+            return 0; 
         }
     } else if (bytes_written == 0) {
     }

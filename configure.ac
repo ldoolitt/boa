@@ -70,6 +70,7 @@ AC_FUNC_SETVBUF_REVERSED
 AC_CHECK_FUNCS(getcwd strdup strstr strcspn strtol)
 AC_CHECK_FUNCS(gethostname gethostbyname socket inet_aton inet_addr)
 AC_CHECK_FUNCS(scandir alphasort)
+AC_CHECK_FUNCS(pread)
 
 AC_CHECK_STRUCT_FOR([
 #if TIME_WITH_SYS_TIME
