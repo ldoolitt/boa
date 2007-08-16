@@ -406,6 +406,7 @@ int init_cgi(request * req)
     int child_pid;
     int pipes[2];
     int use_pipes = 0;
+    int err;
 
     SQUASH_KA(req);
 
@@ -540,8 +541,18 @@ int init_cgi(request * req)
         }
         /* tie post_data_fd to POST stdin */
         if (req->method == M_POST) { /* tie stdin to file */
-            lseek(req->post_data_fd, SEEK_SET, 0);
-            dup2(req->post_data_fd, STDIN_FILENO);
+            err = lseek(req->post_data_fd, 0, SEEK_SET);
+            if (err < 0) {
+                log_error_doc(req);
+                perror("lseek");
+                _exit(EXIT_FAILURE);
+            }
+            err = dup2(req->post_data_fd, STDIN_FILENO);
+            if (err < 0) {
+                log_error_doc(req);
+                perror("dup2");
+                _exit(EXIT_FAILURE);
+            }
             close(req->post_data_fd);
         }
 
@@ -568,12 +579,11 @@ int init_cgi(request * req)
 
         {
             struct rlimit rl;
-            int retval;
 
             if (cgi_rlimit_cpu) {
                 rl.rlim_cur = rl.rlim_max = cgi_rlimit_cpu;
-                retval = setrlimit(RLIMIT_CPU, &rl);
-                if (retval == -1) {
+                err = setrlimit(RLIMIT_CPU, &rl);
+                if (err == -1) {
                     log_error_time();
                     fprintf(stderr,
                             "setrlimit(RLIMIT_CPU,%d): %s\n",
@@ -584,8 +594,8 @@ int init_cgi(request * req)
 
             if (cgi_limit_data) {
                 rl.rlim_cur = rl.rlim_max = cgi_rlimit_data;
-                retval = setrlimit(RLIMIT_DATA, &rl);
-                if (retval == -1) {
+                err = setrlimit(RLIMIT_DATA, &rl);
+                if (err == -1) {
                     log_error_time();
                     fprintf(stderr,
                             "setrlimit(RLIMIT_DATA,%d): %s\n",
@@ -595,8 +605,8 @@ int init_cgi(request * req)
             }
 
             if (cgi_nice) {
-                retval = nice(cgi_nice);
-                if (retval == -1) {
+                err = nice(cgi_nice);
+                if (err == -1) {
                     log_error_time();
                     perror("nice");
                     _exit(EXIT_FAILURE);
@@ -617,7 +627,11 @@ int init_cgi(request * req)
          *  scribble on the error_log, probably a bad thing.
          */
         if (cgi_log_fd) {
-            dup2(cgi_log_fd, STDERR_FILENO);
+            if (dup2(cgi_log_fd, STDERR_FILENO) < 0) {
+                log_error_doc(req);
+                perror("dup2");
+                _exit(EXIT_FAILURE);
+            }
         }
 
         if (req->cgi_type) {
