@@ -298,13 +298,17 @@ int io_shuffle(request * req)
                  bytes_to_read);
 
         if (bytes_read == -1) {
-            if (errno == EINTR)
+            if (errno == EINTR) {
                 goto restartread;
-            else if (errno == EWOULDBLOCK || errno == EAGAIN) {
+            } else if (errno == EWOULDBLOCK || errno == EAGAIN) {
                 /* not a fatal error, don't worry about it */
                 /* buffer is empty, we're blocking on read! */
                 if (req->buffer_end - req->buffer_start == 0)
                     return -1;
+            } else if (errno == EPIPE) {
+                /* no one cares if we log anything */
+                req->status = DEAD;
+                return 0;
             } else {
                 req->status = DEAD;
                 log_error_doc(req);
