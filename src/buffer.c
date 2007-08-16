@@ -43,9 +43,9 @@ int req_write(request * req, const char *msg)
     if (req->buffer_end + msg_len > sizeof(req->buffer)) {
         log_error_doc(req);
         fprintf(stderr, "There is not enough room in the buffer to"
-                " copy %u bytes (" OFF_T_FORMAT " available). Shutting down connection.\n",
+                " copy %u bytes (%d available). Shutting down connection.\n",
                 msg_len,
-                sizeof(req->buffer) - req->buffer_end);
+                (int) sizeof(req->buffer) - req->buffer_end);
 #ifdef FASCIST_LOGGING
         *(req->buffer + req->buffer_end) = '\0';
         fprintf(stderr, "The request looks like this:\n%s\n",
