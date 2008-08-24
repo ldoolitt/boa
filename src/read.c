@@ -258,7 +258,12 @@ int read_header(request * req)
                 ;
             } else {
 #ifndef QUIET_DISCONNECT
-                log_error_doc(req);
+                if (req->client_stream_pos != 0) {
+                    /* have read at least 1 byte */
+                    log_error_doc(req);
+                } else {
+                    log_error_time();
+                }
                 fputs("client unexpectedly closed connection.\n", stderr);
 #endif
             }
