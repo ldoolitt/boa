@@ -23,11 +23,7 @@ fi
 AC_SUBST(ALLSOURCES)
 AC_SUBST(MAKE)
 
-dnl AC_MSG_RESULT($host) dnl i686-pc-linux-gnu
-dnl AC_MSG_RESULT($host_cpu) dnl i686
-dnl AC_MSG_RESULT($host_vendor) dnl pc
-dnl AC_MSG_RESULT($host_os) dnl linux-gnu
-dnl i386-unknown-freebsd4.2
+AC_SYS_LARGEFILE
 
 dnl Checks for libraries.
 # AC_SEARCH_LIBS (function, search-libs, [action-if-found], [action-if-not-found], [other-libraries])
@@ -116,22 +112,42 @@ if test "$ac_cv_struct_sockaddr_in_has_sin_len" = "yes"; then
 fi
 
 if test $ac_cv_func_scandir = no; then
-  # scandir not defined, add it
+  dnl scandir not defined, add it
   SCANDIR="scandir.o"
   AC_SUBST(SCANDIR)
 fi
 
 if test $ac_cv_func_alphasort = no; then
-  # alphasort not defined, add it
+  dnl alphasort not defined, add it
   ALPHASORT="alphasort.o"
   AC_SUBST(ALPHASORT)
 fi
 
 if test $ac_cv_func_strdup = no -o $ac_cv_func_strstr = no; then
-  # strdup or strstr not defined
+  dnl strdup or strstr not defined
   STRUTIL="strutil.o"
   AC_SUBST(STRUTIL)
 fi
+
+AC_MSG_CHECKING(cgi support)
+AC_ARG_ENABLE(cgi,
+[  --disable-cgi           Disable CGI support],
+[
+  if test "$enableval" = "yes" ; then
+    AC_MSG_RESULT(yes)
+    AC_DEFINE_UNQUOTED(ENABLE_CGI)
+    AC_DEFINE(ENABLE_CGI,1,[Define if user has enabled cgi])
+  else
+    AC_MSG_RESULT(no)
+  fi
+ ],
+[
+  AC_MSG_RESULT(yes)
+  AC_DEFINE_UNQUOTED(ENABLE_CGI)
+  AC_DEFINE(ENABLE_CGI,1,[Define if user has enabled cgi])
+])
+
+
 
 if test -n "$GCC"; then
   dnl if we are running gcc, use -pipe
@@ -172,6 +188,7 @@ AC_ARG_ENABLE(mmap,
     AC_MSG_RESULT(yes)
     AC_FUNC_MMAP
     AC_CHECK_FUNCS(madvise)
+    AC_DEFINE_UNQUOTED(ENABLE_MMAP)
     AC_DEFINE(ENABLE_MMAP,1,[Define if user has enabled mmap])
 ])
 
@@ -305,15 +322,15 @@ else
 fi
 AC_SUBST(ASYNCIO_SOURCE)
 
-# there are three scenarios
-# GNU make is installed as "make"
-# GNU make is installed as something else we detected
-# GNU make is not installed
-# Unfortunately, we can't deal with it one way or the other
-# Trying multiple AC_OUTPUT confuses autoconf, and using variables
-# *in* AC_OUTPUT is even worse.
-# *so*, make a default makefile that just forces make to call gmake
-# or whatever.
+dnl there are three scenarios
+dnl GNU make is installed as "make"
+dnl GNU make is installed as something else we detected
+dnl GNU make is not installed
+dnl Unfortunately, we can't deal with it one way or the other
+dnl Trying multiple AC_OUTPUT confuses autoconf, and using variables
+dnl *in* AC_OUTPUT is even worse.
+dnl *so*, make a default makefile that just forces make to call 
+dnl gmake or whatever.
 
 AC_CONFIG_FILES([Makefile src/Makefile docs/Makefile])
 AC_OUTPUT

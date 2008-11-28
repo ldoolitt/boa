@@ -3,6 +3,9 @@
 /* Define if sa_family_t is not defined */
 #undef DONT_HAVE_SA_FAMILY_T
 
+/* Define if user has enabled cgi */
+#undef ENABLE_CGI
+
 /* Define if user has enabled mmap */
 #undef ENABLE_MMAP
 
