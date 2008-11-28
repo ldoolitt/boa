@@ -153,6 +153,10 @@ int read_header(request * req)
             /* process_header_end inits non-POST CGIs */
 
             if (retval && req->method == M_POST) {
+#ifndef ENABLE_CGI
+                boa_perror(req, "CGI support has been disabled.");
+                retval = 0;
+#else
                 /* for body_{read,write}, set header_line to start of data,
                    and header_end to end of data */
                 req->header_line = check;
@@ -187,6 +191,7 @@ int read_header(request * req)
                                 "Invalid Content-Length [%s] on POST!\n",
                                 req->content_length);
                         send_r_bad_request(req);
+
                         return 0;
                     }
                     if (single_post_limit
@@ -209,6 +214,7 @@ int read_header(request * req)
                     send_r_bad_request(req);
                     return 0;
                 }
+#endif /* ENABLE_CGI */
             }                   /* either process_header_end failed or req->method != POST */
             return retval;      /* 0 - close it done, 1 - keep on ready */
         }                       /* req->status == BODY_READ */
@@ -291,6 +297,7 @@ int read_header(request * req)
     return 1;
 }
 
+#ifdef ENABLE_CGI
 /*
  * Name: read_body
  * Description: Reads body from a request socket for POST CGI
@@ -427,3 +434,6 @@ int write_body(request * req)
 
     return 1;                   /* more to do */
 }
+
+#endif /* ENABLE_CGI */
+

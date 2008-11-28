@@ -53,8 +53,10 @@ void loop(int server_s)
         /* handle signals here */
         if (sighup_flag)
             sighup_run();
+#ifdef ENABLE_CGI
         if (sigchld_flag)
             sigchld_run();
+#endif
         if (sigalrm_flag)
             sigalrm_run();
 
@@ -189,6 +191,13 @@ static void fdset_update(void)
                 }
 #endif
             case WRITE:
+                 if (FD_ISSET(current->fd, BOA_WRITE))
+                    ready_request(current);
+                else {
+                    BOA_FD_SET(current, current->fd, BOA_WRITE);
+                }
+                break;
+#ifdef ENABLE_CGI
             case PIPE_WRITE:
                 if (FD_ISSET(current->fd, BOA_WRITE))
                     ready_request(current);
@@ -212,6 +221,7 @@ static void fdset_update(void)
                                BOA_READ);
                 }
                 break;
+#endif
             case DONE:
                 if (FD_ISSET(current->fd, BOA_WRITE))
                     ready_request(current);

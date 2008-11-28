@@ -49,16 +49,19 @@ void block_request(request * req)
             }
 #endif
         case WRITE:
-        case PIPE_WRITE:
         case DONE:
             BOA_FD_SET(req, req->fd, BOA_WRITE);
             break;
+#ifdef ENABLE_CGI
+        case PIPE_WRITE:
+            BOA_FD_SET(req, req->fd, BOA_WRITE);
         case PIPE_READ:
             BOA_FD_SET(req, req->data_fd, BOA_READ);
             break;
         case BODY_WRITE:
             BOA_FD_SET(req, req->post_data_fd, BOA_WRITE);
             break;
+#endif
         default:
             BOA_FD_SET(req, req->fd, BOA_READ);
             break;
@@ -89,16 +92,19 @@ void ready_request(request * req)
             }
 #endif
         case WRITE:
-        case PIPE_WRITE:
         case DONE:
             BOA_FD_CLR(req, req->fd, BOA_WRITE);
             break;
+#ifdef ENABLE_CGI
+        case PIPE_WRITE:
+            BOA_FD_CLR(req, req->fd, BOA_WRITE);
         case PIPE_READ:
             BOA_FD_CLR(req, req->data_fd, BOA_READ);
             break;
         case BODY_WRITE:
             BOA_FD_CLR(req, req->post_data_fd, BOA_WRITE);
             break;
+#endif /* ENABLE_CGI */
         default:
             BOA_FD_CLR(req, req->fd, BOA_READ);
         }

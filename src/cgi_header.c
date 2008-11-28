@@ -19,6 +19,7 @@
  *
  */
 
+#ifdef ENABLE_CGI
 #include "boa.h"
 
 /* process_cgi_header
@@ -136,7 +137,7 @@ int process_cgi_header(request * req)
     } else {                    /* not location and not status */
         char *dest;
         unsigned int howmuch;
-        send_r_request_ok(req); /* does not terminate */
+        send_bare_r_request_ok(req); /* does not terminate */
         /* got to do special things because
            a) we have a single buffer divided into 2 pieces
            b) we need to merge those pieces
@@ -173,3 +174,6 @@ int process_cgi_header(request * req)
     }
     return 1;
 }
+
+#endif /* ENABLE_CGI */
+

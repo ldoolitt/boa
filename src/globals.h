@@ -124,8 +124,10 @@ struct request {                /* pending requests */
     enum HTTP_METHOD method;    /* M_GET, M_POST, etc. */
     enum RESPONSE_CODE response_status; /* R_NOT_FOUND, etc.. */
 
+#ifdef ENABLE_CGI
     enum CGI_TYPE cgi_type;
     enum CGI_STATUS cgi_status;
+#endif
 
     /* should pollfd_id be zeroable or no ? */
 #ifdef HAVE_POLL
@@ -165,12 +167,15 @@ struct request {                /* pending requests */
     char *header_ifrange;
     char *host;                 /* what we end up using for 'host', no matter the contents of header_host */
 
+#ifdef ENABLE_CGI
     int post_data_fd;           /* fd for post data tmpfile */
 
     char *path_info;            /* env variable */
     char *path_translated;      /* env variable */
     char *script_name;          /* env variable */
     char *query_string;         /* env variable */
+#endif /* ENABLE_CGI */
+
     char *content_type;         /* env variable */
     char *content_length;       /* env variable */
 
@@ -195,11 +200,12 @@ struct request {                /* pending requests */
     char buffer[BUFFER_SIZE + 1]; /* generic I/O buffer */
     char request_uri[MAX_HEADER_LENGTH + 1]; /* uri */
     char client_stream[CLIENT_STREAM_SIZE]; /* data from client - fit or be hosed */
+#ifdef ENABLE_CGI    
     char *cgi_env[CGI_ENV_MAX]; /* CGI environment */
-
 #ifdef ACCEPT_ON
     char accept[MAX_ACCEPT_LENGTH]; /* Accept: fields */
-#endif
+#endif /* ACCEPT_ON */
+#endif /* ENABLE_CGI */
 
     struct request *next;       /* next */
     struct request *prev;       /* previous */
@@ -291,3 +297,4 @@ extern int handle_sigbus;
 extern unsigned int cgi_umask;
 
 #endif
+

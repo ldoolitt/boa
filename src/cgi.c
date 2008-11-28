@@ -22,6 +22,7 @@
  */
 
 
+#ifdef ENABLE_CGI
 #include "boa.h"
 
 static char *env_gen_extra(const char *key, const char *value,
@@ -675,3 +676,6 @@ int init_cgi(request * req)
 
     return 1;
 }
+
+#endif /* ENABLE_CGI */
+

@@ -287,7 +287,6 @@ static void sanitize_request(request * req, int new_req)
 
 static void free_request(request * req)
 {
-    int i;
     /* free_request should *never* get called by anything but
        process_requests */
 
@@ -339,36 +338,42 @@ static void free_request(request * req)
         BOA_FD_CLR(req, req->data_fd, BOA_READ);
     }
 
+    if (req->response_status >= 400)
+        status.errors++;
+
+    if (req->pathname)
+        free(req->pathname);
+    if (req->requested_host)
+        free(req->requested_host);
+    if (req->ranges)
+        ranges_reset(req);
+
+#ifdef ENABLE_CGI
     if (req->post_data_fd) {
         close(req->post_data_fd);
         BOA_FD_CLR(req, req->post_data_fd, BOA_WRITE);
     }
 
-    if (req->response_status >= 400)
-        status.errors++;
+    {
+        int i;
 
-    for (i = common_cgi_env_count; i < req->cgi_env_index; ++i) {
-        if (req->cgi_env[i]) {
-            free(req->cgi_env[i]);
-        } else {
-            log_error_time();
-            fprintf(stderr, "Warning: CGI Environment contains NULL value"
-                    "(index %d of %d).\n", i, req->cgi_env_index);
+        for (i = common_cgi_env_count; i < req->cgi_env_index; ++i) {
+            if (req->cgi_env[i]) {
+                free(req->cgi_env[i]);
+            } else {
+                log_error_time();
+                fprintf(stderr, "Warning: CGI Environment contains NULL value"
+                        "(index %d of %d).\n", i, req->cgi_env_index);
+            }
         }
     }
-
-    if (req->pathname)
-        free(req->pathname);
     if (req->path_info)
         free(req->path_info);
     if (req->path_translated)
         free(req->path_translated);
     if (req->script_name)
         free(req->script_name);
-    if (req->host)
-        free(req->host);
-    if (req->ranges)
-        ranges_reset(req);
+#endif
 
     if (req->status < TIMED_OUT && (req->keepalive == KA_ACTIVE) &&
         (req->response_status < 500 && req->response_status != 0) && req->kacount > 0) {
@@ -483,20 +488,22 @@ void process_requests(int server_sock)
             case TWO_CR:
                 retval = read_header(current);
                 break;
+#ifdef ENABLE_CGI
             case BODY_READ:
                 retval = read_body(current);
                 break;
             case BODY_WRITE:
                 retval = write_body(current);
                 break;
-            case WRITE:
-                retval = process_get(current);
-                break;
             case PIPE_READ:
                 retval = read_from_pipe(current);
                 break;
             case PIPE_WRITE:
                 retval = write_from_pipe(current);
+                break;
+#endif
+            case WRITE:
+                retval = process_get(current);
                 break;
             case IOSHUFFLE:
 #ifdef HAVE_SENDFILE
@@ -758,7 +765,9 @@ int process_logline(request * req)
         send_r_bad_request(req);
         return 0;
     }
+#ifdef ENABLE_CGI
     req->cgi_env_index = common_cgi_env_count;
+#endif
 
     return 1;
 
@@ -779,6 +788,8 @@ int process_logline(request * req)
 
 int process_header_end(request * req)
 {
+    char *query_string;
+
     if (!req->logline) {
         log_error_doc(req);
         fputs("No logline in process_header_end\n", stderr);
@@ -787,12 +798,21 @@ int process_header_end(request * req)
     }
 
     /* Percent-decode request */
-    if (unescape_uri(req->request_uri, &(req->query_string)) == 0) {
+    if (unescape_uri(req->request_uri, &query_string) == 0) {
+        if (query_string) {
+            free(query_string);
+        }
         log_error_doc(req);
         fputs("URI contains bogus characters\n", stderr);
         send_r_bad_request(req);
         return 0;
     }
+
+#ifdef ENABLE_CGI
+    req->query_string = query_string;
+#else
+#warning FIXME
+#endif
 
     /* clean pathname */
     clean_pathname(req->request_uri);
@@ -840,6 +860,12 @@ int process_header_end(request * req)
         return 0;               /* failure, close down */
     }
 
+#ifndef ENABLE_CGI
+    if (req->method == M_POST) {
+        boa_perror(req, "CGI support is not enabled.");
+        return 0;
+    }
+#else
     if (req->method == M_POST) {
         req->post_data_fd = create_temporary_file(1, NULL, 0);
         if (req->post_data_fd == 0) {
@@ -859,6 +885,7 @@ int process_header_end(request * req)
     if (req->cgi_type) {
         return init_cgi(req);
     }
+#endif /* ENABLE_CGI */
 
     req->status = WRITE;
 
@@ -972,7 +999,14 @@ int process_option_line(request * req)
         break;
     }                           /* switch */
 
+#ifdef ENABLE_CGI
+    if (req->cgi_type) {
+        /* it's a CGI */
     return add_cgi_env(req, line, value, 1);
+    }
+#endif
+    /* effectively discard */
+    return 1;
 }
 
 #ifdef ACCEPT_ON

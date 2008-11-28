@@ -36,8 +36,10 @@ void sigbus(int);
 void sigterm(int);
 void sighup(int);
 void sigint(int);
-void sigchld(int);
 void sigalrm(int);
+#ifdef ENABLE_CGI
+void sigchld(int);
+#endif
 
 /*
  * Name: init_signals
@@ -80,8 +82,10 @@ void init_signals(void)
     sa.sa_handler = SIG_IGN;
     sigaction(SIGPIPE, &sa, NULL);
 
+#ifdef ENABLE_CGI
     sa.sa_handler = sigchld;
     sigaction(SIGCHLD, &sa, NULL);
+#endif
 
     sa.sa_handler = sigalrm;
     sigaction(SIGALRM, &sa, NULL);
@@ -169,7 +173,9 @@ void sigterm_stage2_run(void)
             "exiting Boa normally (uptime %d seconds)\n",
             (int) (current_time - start_time));
     chdir(tempdir);
+#ifdef ENABLE_CGI
     clear_common_env();
+#endif /* ENABLE_CGI */
     dump_mime();
     dump_passwd();
     dump_alias();
@@ -227,6 +233,7 @@ void sigint(int dummy)
     exit(EXIT_FAILURE);
 }
 
+#ifdef ENABLE_CGI
 void sigchld(int dummy)
 {
     sigchld_flag = 1;
@@ -248,6 +255,7 @@ void sigchld_run(void)
         }
     return;
 }
+#endif
 
 void sigalrm(int dummy)
 {

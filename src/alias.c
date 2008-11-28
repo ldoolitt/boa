@@ -416,6 +416,7 @@ int translate_uri(request * req)
                 get_mime_type(buffer), CGI_MIME_TYPE, strcmp(CGI_MIME_TYPE, get_mime_type(buffer)));
 #endif
 
+#ifdef ENABLE_CGI
     /* below we support cgis outside of a ScriptAlias */
     if (strcmp(CGI_MIME_TYPE, get_mime_type(req->pathname)) == 0) { /* cgi */
         /* FIXME */
@@ -430,7 +431,9 @@ int translate_uri(request * req)
         else
             req->cgi_type = CGI;
         return 1;
-    } else if (req->method == M_POST) { /* POST to non-script */
+    } else 
+#endif 
+    if (req->method == M_POST) { /* POST to non-script */
         /* it's not a cgi, but we try to POST??? */
         log_error_doc(req);
         fputs("POST to non-script disallowed.\n", stderr);
@@ -440,6 +443,13 @@ int translate_uri(request * req)
         return 1;
 }
 
+#ifndef ENABLE_CGI
+static int init_script_alias(request * req, alias * current1, unsigned int uri_len)
+{
+    boa_perror(req, "CGI Support has been disabled.");
+    return 0;
+}
+#else
 /*
  * Name: init_script_alias
  *
@@ -699,6 +709,7 @@ static int init_script_alias(request * req, alias * current1, unsigned int uri_l
 
     return 1;
 }
+#endif
 
 /*
  * Empties the alias hashtable, deallocating any allocated memory.

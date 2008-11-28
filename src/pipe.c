@@ -24,6 +24,8 @@
 
 #include "boa.h"
 
+#ifdef ENABLE_CGI
+
 /*
  * Name: read_from_pipe
  * Description: Reads data from a pipe
@@ -165,6 +167,8 @@ int write_from_pipe(request * req)
 
     return 1;
 }
+
+#endif /* ENABLE_CGI */
 
 #ifdef HAVE_SENDFILE
 int io_shuffle_sendfile(request * req)
@@ -360,3 +364,5 @@ int io_shuffle(request * req)
 
     return 1;
 }
+
+

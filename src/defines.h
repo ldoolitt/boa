@@ -80,6 +80,15 @@
 #define MAX_FILE_LENGTH				NAME_MAX
 #define MAX_PATH_LENGTH				PATH_MAX
 
+#ifndef ENABLE_CGI
+#ifdef ACCEPT_ON
+#undef ACCEPT_ON
+#endif /* ACCEPT_ON */
+#ifdef GUNZIP
+#undef GUNZIP
+#endif /* GUNZIP */
+#endif
+
 #ifdef ACCEPT_ON
 #define MAX_ACCEPT_LENGTH MAX_HEADER_LENGTH
 #else

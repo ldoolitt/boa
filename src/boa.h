@@ -131,6 +131,7 @@ void print_partial_content_done(request * req);
 int complete_response(request *req);
 
 void send_r_continue(request * req); /* 100 */
+void send_base_r_request_ok(request * req); /* 200, min. resp. for CGI */
 void send_r_request_ok(request * req); /* 200 */
 void send_r_no_content(request * req); /* 204 */
 void send_r_partial_content(request * req); /* 206 */
@@ -152,11 +153,17 @@ void send_r_service_unavailable(request * req); /* 503 */
 void send_r_bad_version(request * req, const char * version); /* 505 */
 
 /* cgi */
+#ifdef ENABLE_CGI
 void create_common_env(void);
 void add_to_common_env(char *key, char *value);
 void clear_common_env(void);
 int add_cgi_env(request * req, const char *key, const char *value, int http_prefix);
 int init_cgi(request * req);
+#else
+#define create_common_env() do { } while (0)
+#define add_to_common_env(a, b) do {} while (0)
+#define clear_common_env() do { } while (0)
+#endif
 
 /* signals */
 void init_signals(void);

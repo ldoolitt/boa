@@ -23,7 +23,9 @@
 
 #include "boa.h"
 
+#ifdef ENABLE_CGI
 int cgi_log_fd;
+#endif
 
 /*
  * Name: open_logs
@@ -77,6 +79,7 @@ void open_logs(void)
 
     close(access_log);
 
+#ifdef ENABLE_CGI
     if (cgi_log_name) {
         cgi_log_fd = open_gen_fd(cgi_log_name);
         if (cgi_log_fd == -1) {
@@ -94,6 +97,7 @@ void open_logs(void)
             }
         }
     }
+#endif
 #ifdef SETVBUF_REVERSED
     setvbuf(stderr, _IONBF, (char *) NULL, 0);
     setvbuf(stdout, _IOLBF, (char *) NULL, 0);

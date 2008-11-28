@@ -24,6 +24,10 @@
 #include "boa.h"
 #include "access.h"
 
+#ifdef GUNZIP
+#error Funk
+#endif
+
 #define STR(s) __STR(s)
 #define __STR(s) #s
 
@@ -542,6 +546,7 @@ int get_dir(request * req, struct stat *statbuf)
 #endif
     }
 
+#ifdef ENABLE_CGI
     /* only here if index.html, index.html.gz don't exist */
     if (dirmaker != NULL) {     /* don't look for index.html... maybe automake? */
         req->response_status = R_REQUEST_OK;
@@ -561,7 +566,9 @@ int get_dir(request * req, struct stat *statbuf)
 
         return init_cgi(req);
         /* in this case, 0 means success */
-    } else if (cachedir) {
+    }
+#endif
+   if (cachedir) {
         return get_cachedir_file(req, statbuf);
     } else {                    /* neither index.html nor autogenerate are allowed */
         send_r_forbidden(req);

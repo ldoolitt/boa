@@ -190,12 +190,14 @@ void send_r_request_ok(request * req)
     req_write(req, " 200 OK" CRLF);
     print_http_headers(req);
 
+#ifdef ENABLE_CGI
     if (!req->cgi_type) {
         print_content_length(req);
         print_last_modified(req);
         print_content_type(req);
         req_write(req, CRLF);
     }
+#endif /* ENABLE_CGI */    
 }
 
 /* R_NO_CONTENT: 204 */
@@ -211,11 +213,7 @@ void send_r_no_content(request * req)
     req_write(req, msg);
     print_http_headers(req);
     print_content_length(req);
-
-    /* FIXME: Why is this here? */
-    if (!req->cgi_type) {
-        req_write(req, CRLF);
-    }
+    req_write(req, CRLF);
 }
 
 /* R_PARTIAL_CONTENT: 206 */
@@ -226,13 +224,6 @@ void send_r_partial_content(request * req)
         "boundary=THIS_STRING_SEPARATES" CRLF;
 
     req->response_status = R_PARTIAL_CONTENT;
-#if 0
-    if (req->http_version != HTTP11) {
-        log_error("can't do partial content if not HTTP/1.1!!");
-        send_r_request_ok(req);
-        return;
-    }
-#endif
 
     req_write(req, http_ver_string(req->http_version));
     req_write(req, msg);

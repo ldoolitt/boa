@@ -41,16 +41,11 @@ char *user_dir;
 char *directory_index;
 char *default_type;
 char *default_charset;
-char *dirmaker;
 char *cachedir;
 
 const char *tempdir;
 
-unsigned int cgi_umask = 027;
-
 char *pid_file;
-char *cgi_path;
-int single_post_limit = SINGLE_POST_LIMIT_DEFAULT;
 int conceal_server_identity = 0;
 
 int ka_timeout;
@@ -60,15 +55,24 @@ unsigned int ka_max;
 /* These came from log.c */
 char *error_log_name;
 char *access_log_name;
-char *cgi_log_name;
 
 int use_localtime;
 
+#ifdef ENABLE_CGI
+char *cgi_path;
+int single_post_limit = SINGLE_POST_LIMIT_DEFAULT;
+unsigned int cgi_umask = 027;
+char *dirmaker;
+char *cgi_log_name;
 #ifdef USE_SETRLIMIT
 extern int cgi_rlimit_cpu;      /* boa.c */
 extern int cgi_rlimit_data;     /* boa.c */
 extern int cgi_nice;            /* boa.c */
-#endif
+#endif /* USE_SETRLIMIT */
+static void c_add_cgi_env(char *v1, char *v2, void *table_ptr);
+#else /* ENABLE_CGI is false */
+static void c_no_cgi(char *v1, char *v2, void *table_ptr);
+#endif /* ENABLE_CGI */
 
 static void c_do_chroot(char *v1, char *v2, void *t);
 static void c_add_cgi_env(char *v1, char *v2, void *table_ptr);
@@ -97,7 +101,9 @@ static void parse(FILE * f);
 
 /* Fakery to keep the value passed to action() a void *,
    see usage in table and c_add_alias() below */
+#ifdef ENABLE_CGI
 static enum ALIAS script_number = SCRIPTALIAS;
+#endif
 static enum ALIAS redirect_number = REDIRECT;
 static enum ALIAS alias_number = ALIAS;
 static int access_allow_number = ACCESS_ALLOW;
@@ -127,17 +133,45 @@ static struct ccommand clist[] = {
     {"UseLocaltime", S0A, c_set_unity, &use_localtime},
     {"ErrorLog", S1A, c_set_string, &error_log_name},
     {"AccessLog", S1A, c_set_string, &access_log_name},
+#ifdef ENABLE_CGI
     {"CgiLog", S1A, c_set_string, &cgi_log_name}, /* compatibility with CGILog */
     {"CGILog", S1A, c_set_string, &cgi_log_name},
     {"VerboseCGILogs", S0A, c_set_unity, &verbose_cgi_logs},
-    {"ServerName", S1A, c_set_string, &server_name},
+    {"ScriptAlias", S2A, c_add_alias, &script_number},
+    {"SinglePostLimit", S1A, c_set_int, &single_post_limit},
+    {"CGIPath", S1A, c_set_string, &cgi_path},
+#ifdef USE_SETRLIMIT
+    {"CGIRlimitCpu", S2A, c_set_int, &cgi_rlimit_cpu},
+    {"CGIRlimitData", S2A, c_set_int, &cgi_rlimit_data},
+    {"CGINice", S2A, c_set_int, &cgi_nice},
+#endif /* USE_SETRLIMIT */
+    {"CGIEnv", S2A, c_add_cgi_env, NULL},
+    {"CGIumask", S1A, c_set_int, &cgi_umask},
+    {"DirectoryMaker", S1A, c_set_string, &dirmaker},
+#else /* ENABLE_CGI is false */
+    {"CgiLog", S1A, c_no_cgi, "CgiLog"},
+    {"CGILog", S1A, c_no_cgi, "CGILog"},
+    {"VerboseCGILogs", S0A, c_no_cgi, "VerboseCGILogs"},
+    {"ScriptAlias", S2A, c_no_cgi, "ScriptAlias"},
+    {"SinglePostLimit", S1A, c_no_cgi, "SinglePostLimit"},
+    {"CGIPath", S1A, c_no_cgi, "CGIPath"},
+#ifdef USE_SETRLIMIT
+    {"CGIRlimitCpu", S2A, c_no_cgi, "CGIRlimitCpu"},
+    {"CGIRlimitData", S2A, c_no_cgi, "CGIRlimitData"},
+    {"CGINice", S2A, c_no_cgi, "CGINice"},
+#endif /* USE_SETRLIMIT */
+    {"CGIEnv", S2A, c_no_cgi, "CGIEnv"},
+    {"CGIumask", S1A, c_no_cgi, "CGIumask"},
+    {"DirectoryMaker", S1A, c_no_cgi, "DirectoryMaker"},
+#endif /* ENABLE_CGI */
+    {"ServerName", S1A, c_add_server_name, NULL},
+    {"StrictHostChecking", S0A, c_set_unity, &strict_host_checking},
     {"VirtualHost", S0A, c_set_unity, &virtualhost},
     {"VHostRoot", S1A, c_set_string, &vhost_root},
     {"DefaultVHost", S1A, c_set_string, &default_vhost},
     {"DocumentRoot", S1A, c_set_string, &document_root},
     {"UserDir", S1A, c_set_string, &user_dir},
     {"DirectoryIndex", S1A, c_set_string, &directory_index},
-    {"DirectoryMaker", S1A, c_set_string, &dirmaker},
     {"DirectoryCache", S1A, c_set_string, &cachedir},
     {"PidFile", S1A, c_set_string, &pid_file},
     {"KeepAliveMax", S1A, c_set_int, &ka_max},
@@ -146,34 +180,33 @@ static struct ccommand clist[] = {
     {"DefaultType", S1A, c_set_string, &default_type},
     {"DefaultCharset", S1A, c_set_string, &default_charset},
     {"AddType", S2A, c_add_mime_type, NULL},
-    {"ScriptAlias", S2A, c_add_alias, &script_number},
+    {"AddEncoding", S2A, c_add_encoding, NULL},
     {"Redirect", S2A, c_add_alias, &redirect_number},
     {"Alias", S2A, c_add_alias, &alias_number},
-    {"SinglePostLimit", S1A, c_set_int, &single_post_limit},
-    {"CGIPath", S1A, c_set_string, &cgi_path},
-    {"CGIumask", S1A, c_set_int, &cgi_umask},
     {"MaxConnections", S1A, c_set_int, &max_connections},
     {"ConcealServerIdentity", S0A, c_set_unity, &conceal_server_identity},
     {"Allow", S1A, c_add_access, &access_allow_number},
     {"Deny", S1A, c_add_access, &access_deny_number},
-#ifdef USE_SETRLIMIT
-    {"CGIRlimitCpu", S2A, c_set_int, &cgi_rlimit_cpu},
-    {"CGIRlimitData", S2A, c_set_int, &cgi_rlimit_data},
-    {"CGINice", S2A, c_set_int, &cgi_nice},
-#endif
-    {"CGIEnv", S2A, c_add_cgi_env, NULL},
     {"Chroot", S1A, c_do_chroot, NULL},
 };
+
+static void c_no_cgi(char *v1, char *v2, void *t)
+{
+    log_error_time();
+    printf("boa: CGI support has been disabled [%s].\n", (char *) t);
+}
 
 static void c_do_chroot(char *v1, char *v2, void *t)
 {
     do_chroot(v1); /* does not return on failure */
 }
 
+#ifdef ENABLE_CGI
 static void c_add_cgi_env(char *v1, char *v2, void *t)
 {
     add_to_common_env(v1, v2);
 }
+#endif /* ENABLE_CGI */
 
 static void c_set_user(char *v1, char *v2, void *t)
 {
@@ -546,11 +579,13 @@ void read_config_files(void)
     if (tempdir == NULL)
         tempdir = "/tmp";
 
+#ifdef ENABLE_CGI
     if (single_post_limit < 0) {
         fprintf(stderr, "Invalid value for single_post_limit: %d\n",
                 single_post_limit);
         exit(EXIT_FAILURE);
     }
+#endif
 
     if (vhost_root && virtualhost) {
         fprintf(stderr, "Both VHostRoot and VirtualHost were enabled, and "
