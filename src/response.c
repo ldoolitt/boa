@@ -210,6 +210,7 @@ void send_r_no_content(request * req)
     req_write(req, http_ver_string(req->http_version));
     req_write(req, msg);
     print_http_headers(req);
+    print_content_length(req);
 
     /* FIXME: Why is this here? */
     if (!req->cgi_type) {
@@ -480,7 +481,6 @@ void send_r_invalid_range(request * req)
     static char body[] =
         "<HTML><HEAD><TITLE>416 Invalid Range</TITLE></HEAD>\n"
         "<BODY><H1>416 Invalid Range</H1>\n</BODY></HTML>\n";
-    static unsigned int body_len = 0;
 
     SQUASH_KA(req);
     req->response_status = R_INVALID_RANGE;
@@ -488,10 +488,6 @@ void send_r_invalid_range(request * req)
         req_write(req, http_ver_string(req->http_version));
         req_write(req, " 416 Invalid Range" CRLF);
         print_http_headers(req);
-        if (!body_len)
-            body_len = strlen(body);
-        req_write(req, "Content-Length: ");
-        req_write(req, simple_itoa(body_len));
         req_write(req, CRLF "Content-Type: " HTML CRLF CRLF); /* terminate header */
     }
     if (req->method != M_HEAD) {
