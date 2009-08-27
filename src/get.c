@@ -68,7 +68,8 @@ int init_get(request * req)
             log_error_doc(req);
             fprintf(stderr, "Pathname + .gz too long! (%s)\n", req->pathname);
             send_r_bad_request(req);
-            return 0;
+            req->status = DONE;
+            return 1;
         }
 
         memcpy(gzip_pathname, req->pathname, len);
@@ -84,7 +85,8 @@ int init_get(request * req)
             req->pathname = strdup(gzip_pathname);
             if (!req->pathname) {
                 boa_perror(req, "strdup req->pathname for gzipped filename " __FILE__ ":" STR(__LINE__));
-                return 0;
+                req->status = DONE;
+                return 1;
             }
             if (req->http_version != HTTP09) {
                 req_write(req, http_ver_string(req->http_version));
@@ -95,8 +97,10 @@ int init_get(request * req)
                 req_write(req, CRLF);
                 req_flush(req);
             }
-            if (req->method == M_HEAD)
-                return 0;
+            if (req->method == M_HEAD) {
+                req->status = DONE;
+                return 1;
+            }
 
             return init_cgi(req);
         }
@@ -114,13 +118,15 @@ int init_get(request * req)
             send_r_forbidden(req);
         else
             send_r_bad_request(req);
-        return 0;
+        req->status = DONE;
+        return 1;
     }
 
 #ifdef ACCESS_CONTROL
     if (!access_allow(req->pathname)) {
       send_r_forbidden(req);
-      return 0;
+      req->status = DONE;
+      return 1;
     }
 #endif
 
@@ -202,7 +208,8 @@ int init_get(request * req)
             }
 #endif /* ALLOW LOCAL REDIRECT */
             send_r_moved_perm(req, buffer);
-            return 0;
+            req->status = DONE;
+            return 1;
         }
         data_fd = get_dir(req, &statbuf); /* updates statbuf */
 
@@ -218,7 +225,8 @@ int init_get(request * req)
         fprintf(stderr, "Resulting file is not a regular file.\n");
         send_r_bad_request(req);
         close(data_fd);
-        return 0;
+        req->status = DONE;
+        return 1;
     }
 
     /* If-UnModified-Since asks
@@ -246,7 +254,8 @@ int init_get(request * req)
         !modified_since(&(statbuf.st_mtime), req->if_modified_since)) {
         send_r_not_modified(req);
         close(data_fd);
-        return 0;
+        req->status = DONE;
+        return 1;
     }
 
     req->filesize = statbuf.st_size;
@@ -267,19 +276,22 @@ int init_get(request * req)
      */
 
     if (req->filesize == 0) {
+        /* not an error */
         if (req->http_version < HTTP11) {
             send_r_request_ok(req);
-            close(data_fd);
-            return 0;
+        } else {
+            send_r_no_content(req);
         }
-        send_r_no_content(req);
+        req->status = DONE;
         close(data_fd);
-        return 0;
+        req->status = DONE;
+        return 1;
     }
 
     if (req->ranges && !ranges_fixup(req)) {
         close(data_fd);
-        return 0;
+        req->status = DONE;
+        return 1;
     }
 
     /* if no range has been set, use default range */
@@ -307,7 +319,7 @@ int init_get(request * req)
     req->status = IOSHUFFLE;
 #else
 #ifdef MAX_FILE_MMAP
-    if (req->filesize > MAX_FILE_MMAP) {
+    if (req->filesize > MAX_FILE_MMAP || req->filesize < 4096) {
         req->data_fd = data_fd;
         req->status = IOSHUFFLE;
 #endif /* MAX_FILE_MMAP */
@@ -335,7 +347,8 @@ int init_get(request * req)
         req->ranges->start = 0;
         req->ranges->stop = -1;
         if (!ranges_fixup(req)) {
-            return 0;
+            req->status = DONE;
+            return 1;
         }
         send_r_request_ok(req);
     } else {
@@ -354,7 +367,8 @@ int init_get(request * req)
             req->ranges->start = 0;
             req->ranges->stop = -1;
             if (!ranges_fixup(req)) {
-                return 0;
+                req->status = DONE;
+                return 1;
             }
             send_r_request_ok(req);
         }
