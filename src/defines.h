@@ -64,7 +64,7 @@
 #define BUFFER_SIZE                             4096
 #define MAX_HEADER_LENGTH			1024
 
-#define MIME_HASHTABLE_SIZE			47
+#define MIME_HASHTABLE_SIZE			1009
 #define ALIAS_HASHTABLE_SIZE                    17
 #define PASSWD_HASHTABLE_SIZE		        47
 
