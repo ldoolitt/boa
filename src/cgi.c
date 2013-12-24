@@ -336,8 +336,8 @@ static void create_argv(request * req, char **aargv)
     }
 }
 
-static void close_all(void) {
-    /* for every req, close req->fd */
+static void close_others(request *this_req) {
+    /* for every req *except* this_req, close req->fd */
     request *todo[] = { request_ready, request_block, NULL };
     short i;
     request *req;
@@ -435,7 +435,7 @@ int init_cgi(request * req)
     case 0:
         /* child */
         reset_signals();
-        close_all();
+        close_others(req);
 
         if (req->cgi_type == CGI || req->cgi_type == NPH) {
             char *c;
