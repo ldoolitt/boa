@@ -1,7 +1,7 @@
 /*
  *  Boa, an http server
- *  Copyright (C) 1995 Paul Phillips <psp@well.com>
- *  Some changes Copyright (C) 1996 Larry Doolittle <ldoolitt@jlab.org>
+ *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
+ *  Some changes Copyright (C) 1996 Larry Doolittle <ldoolitt@boa.org>
  *  Some changes Copyright (C) 1999 Jon Nelson <jnelson@boa.org>
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: log.c,v 1.34 2001/06/30 03:41:08 jnelson Exp $*/
+/* $Id: log.c,v 1.36 2002/03/24 22:34:57 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -30,6 +30,8 @@ char *error_log_name;
 char *access_log_name;
 char *cgi_log_name;
 int cgi_log_fd;
+
+FILE *fopen_gen_fd(char *spec, const char *mode);
 
 FILE *fopen_gen_fd(char *spec, const char *mode)
 {
@@ -45,8 +47,12 @@ FILE *fopen_gen_fd(char *spec, const char *mode)
 /*
  * Name: open_logs
  *
- * Description: Opens up the error log, ties it to stderr, and line
- * buffers it.
+ * Description: Opens access log, error log, and if specified, cgi log
+ * Ties stderr to error log, except during cgi execution, at which
+ * time cgi log is the stderr for cgis.
+ *
+ * Access log is line buffered, error log is not buffered.
+ *
  */
 
 void open_logs(void)
@@ -95,6 +101,7 @@ void open_logs(void)
 
     /* if error_log_name is set, dup2 stderr to it */
     /* otherwise, leave stderr alone */
+    /* we don't want to tie stderr to /dev/null */
     if (error_log_name) {
         /* open the log file */
         if (!(error_log = open_gen_fd(error_log_name))) {

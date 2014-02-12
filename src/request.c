@@ -1,8 +1,8 @@
 /*
  *  Boa, an http server
- *  Copyright (C) 1995 Paul Phillips <psp@well.com>
- *  Some changes Copyright (C) 1996,97 Larry Doolittle <ldoolitt@jlab.org>
- *  Some changes Copyright (C) 1996-99 Jon Nelson <jnelson@boa.org>
+ *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
+ *  Some changes Copyright (C) 1996,97 Larry Doolittle <ldoolitt@boa.org>
+ *  Some changes Copyright (C) 1996-2002 Jon Nelson <jnelson@boa.org>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,15 +20,16 @@
  *
  */
 
-/* $Id: request.c,v 1.100 2001/07/18 03:40:10 jnelson Exp $*/
+/* $Id: request.c,v 1.112 2002/03/24 22:39:19 jnelson Exp $*/
 
 #include "boa.h"
-#include <netinet/tcp.h>
-#include <arpa/inet.h>          /* inet_ntoa */
-#include <stddef.h>
+#include <stddef.h> /* for offsetof */
 
-int sockbufsize = SOCKETBUF_SIZE;
 int total_connections;
+static int sockbufsize = SOCKETBUF_SIZE;
+
+/* function prototypes located in this file only */
+static void free_request(request ** list_head_addr, request * req);
 
 /*
  * Name: new_request
@@ -59,7 +60,6 @@ request *new_request(void)
     return req;
 }
 
-
 /*
  * Name: get_request
  *
@@ -71,7 +71,7 @@ void get_request(int server_s)
 {
     int fd;                     /* socket */
     struct SOCKADDR remote_addr; /* address */
-    int remote_addrlen = sizeof (struct sockaddr_in);
+    int remote_addrlen = sizeof (struct SOCKADDR);
     request *conn;              /* connection */
     int len;
     static int system_bufsize = 0; /* Default size of SNDBUF given by system */
@@ -81,8 +81,12 @@ void get_request(int server_s)
                 &remote_addrlen);
 
     if (fd == -1) {
-        if (errno != EAGAIN && errno != EWOULDBLOCK) /* no requests */
+        if (errno != EAGAIN && errno != EWOULDBLOCK)
+            /* abnormal error */
             log_error_mesg(__FILE__, __LINE__, "accept");
+        else
+            /* no requests */
+            pending_requests = 0;
         return;
     }
     if (fd >= FD_SETSIZE) {
@@ -147,7 +151,7 @@ void get_request(int server_s)
     }
 
     /* nonblocking socket */
-    if (fcntl(conn->fd, F_SETFL, NOBLOCK) == -1)
+    if (set_nonblock_fd(conn->fd) == -1)
         log_error_mesg(__FILE__, __LINE__,
                        "fcntl: unable to set new socket to non-block");
 
@@ -191,7 +195,7 @@ void get_request(int server_s)
     ascii_sockaddr(&remote_addr, conn->remote_ip_addr, NI_MAXHOST);
 
     /* for possible use by CGI programs */
-    conn->remote_port = ntohs(remote_addr.sin_port);
+    conn->remote_port = net_port(&remote_addr);
 
     status.requests++;
 
@@ -209,6 +213,14 @@ void get_request(int server_s)
     }
 #endif
 
+#ifndef NO_RATE_LIMIT
+    if (conn->fd > max_connections) {
+        send_r_service_unavailable(conn);
+        conn->status = DONE;
+        pending_requests = 0;
+    }
+#endif                          /* NO_RATE_LIMIT */
+
     total_connections++;
     enqueue(&request_ready, conn);
 }
@@ -223,6 +235,7 @@ void get_request(int server_s)
 
 static void free_request(request ** list_head_addr, request * req)
 {
+    int i;
     /* free_request should *never* get called by anything but
        process_requests */
 
@@ -232,11 +245,6 @@ static void free_request(request ** list_head_addr, request * req)
     }
     /* put request on the free list */
     dequeue(list_head_addr, req); /* dequeue from ready or block list */
-
-    FD_CLR(req->fd, &block_read_fdset);
-    FD_CLR(req->fd, &block_write_fdset);
-    FD_CLR(req->data_fd, &block_read_fdset);
-    FD_CLR(req->post_data_fd, &block_write_fdset);
 
     if (req->logline)           /* access log */
         log_access(req);
@@ -255,13 +263,16 @@ static void free_request(request ** list_head_addr, request * req)
     if (req->response_status >= 400)
         status.errors++;
 
-    if (req->cgi_env) {
-        int i;
-        for (i = COMMON_CGI_COUNT; i < req->cgi_env_index; ++i)
-            if (req->cgi_env[i])
-                free(req->cgi_env[i]);
-        free(req->cgi_env);
+    for (i = COMMON_CGI_COUNT; i < req->cgi_env_index; ++i) {
+        if (req->cgi_env[i]) {
+            free(req->cgi_env[i]);
+        } else {
+            log_error_time();
+            fprintf(stderr, "Warning: CGI Environment contains NULL value" \
+                    "(index %d of %d).\n", i, req->cgi_env_index);
+        }
     }
+
     if (req->pathname)
         free(req->pathname);
     if (req->path_info)
@@ -273,6 +284,7 @@ static void free_request(request ** list_head_addr, request * req)
 
     if ((req->keepalive == KA_ACTIVE) &&
         (req->response_status < 500) && req->kacount > 0) {
+        int bytes_to_move;
 
         request *conn = new_request();
         conn->fd = req->fd;
@@ -292,23 +304,16 @@ static void free_request(request ** list_head_addr, request * req)
 
         status.requests++;
 
-        {
-            int bytes_to_move;
+        /* we haven't parsed beyond req->parse_pos, so... */
+        bytes_to_move = req->client_stream_pos - req->parse_pos;
 
-            /* we haven't parsed beyond req->parse_pos, so... */
-            bytes_to_move = req->client_stream_pos - req->parse_pos;
-
-            if (bytes_to_move) {
-                memcpy(conn->client_stream,
-                       req->client_stream + req->parse_pos, bytes_to_move);
-                conn->client_stream_pos = bytes_to_move;
-                FD_CLR(conn->fd, &block_read_fdset);
-                enqueue(&request_ready, conn);
-            } else {
-                FD_SET(conn->fd, &block_read_fdset);
-                enqueue(&request_block, conn);
-            }
+        if (bytes_to_move) {
+            memcpy(conn->client_stream,
+                   req->client_stream + req->parse_pos, bytes_to_move);
+            conn->client_stream_pos = bytes_to_move;
         }
+        enqueue(&request_block, conn);
+        BOA_FD_SET(conn->fd, &block_read_fdset);
     } else {
         /*
          While debugging some weird errors, Jon Nelson learned that
@@ -342,7 +347,7 @@ static void free_request(request ** list_head_addr, request * req)
          just plain wrong
          */
 
-        if (req->method == M_POST || req->method == M_PUT) {
+        if (req->method == M_POST) {
             char buf[32768];
             read(req->fd, buf, 32768);
         }
@@ -365,10 +370,17 @@ static void free_request(request ** list_head_addr, request * req)
  * ready list for more procesing.
  */
 
-void process_requests(void)
+void process_requests(int server_s)
 {
     int retval = 0;
     request *current, *trailer;
+
+    if (pending_requests) {
+        get_request(server_s);
+#ifdef ORIGINAL_BEHAVIOR
+        pending_requests = 0;
+#endif
+    }
 
     current = request_ready;
 
@@ -442,8 +454,15 @@ void process_requests(void)
 
         }
 
-        if (lame_duck_mode)
+        if (sigterm_flag)
             SQUASH_KA(current);
+
+        /* we put this here instead of after the switch so that
+         * if we are on the last request, and get_request is successful,
+         * current->next is valid!
+         */
+        if (pending_requests)
+            get_request(server_s);
 
         switch (retval) {
         case -1:               /* request blocked */
@@ -497,7 +516,7 @@ int process_logline(request * req)
     else {
         log_error_time();
         fprintf(stderr, "malformed request: \"%s\"\n", req->logline);
-        send_r_bad_request(req);
+        send_r_not_implemented(req);
         return 0;
     }
 
@@ -532,7 +551,13 @@ int process_logline(request * req)
         /* if found, we should get an HTTP/x.x */
         unsigned int p1, p2;
 
-        if (sscanf(++stop2, "HTTP/%u.%u", &p1, &p2) == 2) {
+        /* scan to end of whitespace */
+        ++stop2;
+        while (*stop2 == ' ' && *stop2 != '\0')
+            ++stop2;
+
+        /* scan in HTTP/major.minor */
+        if (sscanf(stop2, "HTTP/%u.%u", &p1, &p2) == 2) {
             /* HTTP/{0.9,1.0,1.1} */
             if (p1 == 1 && (p2 == 0 || p2 == 1)) {
                 req->http_version = stop2;
@@ -549,12 +574,8 @@ int process_logline(request * req)
         send_r_bad_request(req);
         return 0;
     }
-    if (translate_uri(req) == 0) { /* unescape, parse uri */
-        SQUASH_KA(req);
-        return 0;               /* failure, close down */
-    }
-    if (req->is_cgi)
-        create_env(req);
+    req->cgi_env_index = COMMON_CGI_COUNT;
+
     return 1;
 
 BAD_VERSION:
@@ -578,30 +599,39 @@ int process_header_end(request * req)
         send_r_error(req);
         return 0;
     }
-    if (req->method == M_POST) {
-        char *tmpfilep = tmpnam(NULL);
 
-        if (!tmpfilep) {
-            boa_perror(req, "tmpnam");
-            return 0;
-        }
-        /* open temp file for post data */
-        if ((req->post_data_fd = open(tmpfilep, O_RDWR | O_CREAT /* read-write, create */
-                                      | O_EXCL, S_IRUSR /* don't overwrite, u+r */
-                                      & ~S_IWUSR & ~S_IEXEC /* u-wx */
-                                      & ~S_IRWXG /* g-rwx */
-                                      & ~S_IRWXO)) == -1) { /* o-rwx */
-            boa_perror(req, "tmpfile open");
-            return 0;
-        }
-#ifndef REALLY_FASCIST_LOGGING
-        unlink(tmpfilep);
-#endif
-        return 1;
+    /* Percent-decode request */
+    if (unescape_uri(req->request_uri, &(req->query_string)) == 0) {
+        log_error_doc(req);
+        fputs("Problem unescaping uri\n", stderr);
+        send_r_bad_request(req);
+        return 0;
     }
+
+    /* clean pathname */
+    clean_pathname(req->request_uri);
+
+    if (req->request_uri[0] != '/') {
+        send_r_bad_request(req);
+        return 0;
+    }
+
+    if (translate_uri(req) == 0) { /* unescape, parse uri */
+        SQUASH_KA(req);
+        return 0;               /* failure, close down */
+    }
+
+    if (req->method == M_POST) {
+        req->post_data_fd = create_temporary_file(1, NULL, 0);
+        if (req->post_data_fd == 0)
+            return(0);
+        return(1); /* success */
+    }
+
     if (req->is_cgi) {
         return init_cgi(req);
     }
+
     req->status = WRITE;
     return init_get(req);       /* get and head */
 }
@@ -613,7 +643,7 @@ int process_header_end(request * req)
  * appropriate action.
  */
 
-void process_option_line(request * req)
+int process_option_line(request * req)
 {
     char c, *value, *line = req->header_line;
 
@@ -626,7 +656,7 @@ void process_option_line(request * req)
 
     value = strchr(line, ':');
     if (value == NULL)
-        return;
+        return 0;
     *value++ = '\0';            /* overwrite the : */
     to_upper(line);             /* header types are case-insensitive */
     while ((c = *value) && (c == ' ' || c == '\t'))
@@ -652,15 +682,19 @@ void process_option_line(request * req)
     /* #endif */
 
     /* Need agent and referer for logs */
-    else if (!memcmp(line, "REFERER", 8))
+    else if (!memcmp(line, "REFERER", 8)) {
         req->header_referer = value;
-    else if (!memcmp(line, "USER_AGENT", 11))
+        if (!add_cgi_env(req, "REFERER", value, 1))
+            return 0;
+    } else if (!memcmp(line, "USER_AGENT", 11)) {
         req->header_user_agent = value;
-
-    /* Silently ignore unknown header lines unless is_cgi */
-    else if (req->is_cgi)
-        add_cgi_env(req, line, value);
-    return;
+        if (!add_cgi_env(req, "USER_AGENT", value, 1))
+            return 0;
+    } else {
+        if (!add_cgi_env(req, line, value, 1))
+            return 0;
+    }
+    return 1;
 }
 
 /*

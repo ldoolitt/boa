@@ -28,6 +28,26 @@
 * leaves req->cgi_status as WRITE
 */
 
+/*
+ The server MUST also resolve any conflicts between header fields returned by
+ the script and header fields that it would otherwise send itself.
+
+ ...
+
+ At least one CGI-Field MUST be supplied, but no CGI field name may be used
+ more than once in a response. If a body is supplied, then a
+ "Content-type" header field MUST be supplied by the script,
+ otherwise the script MUST send a "Location" or "Status" header
+ field. If a Location CGI-Field is returned, then the script
+ MUST NOT supply any HTTP-Fields.
+ */
+
+/* TODO:
+ We still need to cycle through the data before the end of the headers,
+ line-by-line, and check for any problems with the CGI
+ outputting overriding http responses, etc...
+ */
+
 int process_cgi_header(request * req)
 {
     char *buf;
@@ -48,7 +68,7 @@ int process_cgi_header(request * req)
             log_error_time();
             fprintf(stderr, "\"%s\"\n", buf);
 #endif
-            send_r_error(req);
+            send_r_bad_gateway(req);
             return 0;
         }
     }
@@ -107,9 +127,9 @@ int process_cgi_header(request * req)
             while ((*c2 == '\n' || *c2 == '\r') && c2 < req->header_end)
                 ++c2;
             if (c2 == req->header_end)
-                send_redirect_temp(req, buf + 10, "");
+                send_r_moved_temp(req, buf + 10, "");
             else
-                send_redirect_temp(req, buf + 10, c2);
+                send_r_moved_temp(req, buf + 10, c2);
         }
         req->status = DONE;
         return 1;

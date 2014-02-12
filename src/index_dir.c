@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 1997 Jon Nelson <jnelson@boa.org>
+ *  Copyright (C) 1997-2002 Jon Nelson <jnelson@boa.org>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
  *
  */
 
-/* $Id: index_dir.c,v 1.28 2001/10/13 20:25:49 jnelson Exp $*/
+/* $Id: index_dir.c,v 1.32 2002/01/30 03:41:45 jnelson Exp $*/
 
 #include <stdio.h>
 #include <sys/stat.h>
@@ -26,6 +26,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include "compat.h"
 
 #define MAX_FILE_LENGTH                         MAXNAMLEN
@@ -333,12 +334,22 @@ int main(int argc, char *argv[])
         index_directory(argv[1], argv[2]);
 
     time(&timep);
+#ifdef USE_LOCALTIME
+    timeptr = localtime(&timep);
+#else
     timeptr = gmtime(&timep);
+#endif
     now = strdup(asctime(timeptr));
     now[strlen(now) - 1] = '\0';
+#ifdef USE_LOCALTIME
+    printf("</table>\n<hr noshade>\nIndex generated %s %s\n"
+           "<!-- This program is part of the Boa Webserver Copyright (C) 1991-2002 http://www.boa.org -->\n"
+           "</body>\n</html>\n", now, TIMEZONE(timeptr));
+#else
     printf("</table>\n<hr noshade>\nIndex generated %s UTC\n"
-           "<!-- This program is part of the Boa Webserver Copyright (C) 1991-1999 http://www.boa.org -->\n"
+           "<!-- This program is part of the Boa Webserver Copyright (C) 1991-2002 http://www.boa.org -->\n"
            "</body>\n</html>\n", now);
+#endif
 
     return 0;
 }

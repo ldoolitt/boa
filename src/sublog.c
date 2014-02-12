@@ -18,7 +18,7 @@
  *
  */
 
-/* $Id: sublog.c,v 1.5 2000/02/12 21:52:46 jon Exp $*/
+/* $Id: sublog.c,v 1.6 2002/03/24 22:40:31 jnelson Exp $*/
 
 #include <errno.h>
 #include <stdio.h>
@@ -32,6 +32,10 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
+int open_pipe_fd(char *command);
+int open_net_fd(char *spec);
+int open_gen_fd(char *spec);
 
 /* Like popen, but gives fd instead of FILE * */
 int open_pipe_fd(char *command)

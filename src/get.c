@@ -1,8 +1,8 @@
 /*
  *  Boa, an http server
- *  Copyright (C) 1995 Paul Phillips <psp@well.com>
- *  Some changes Copyright (C) 1996,99 Larry Doolittle <ldoolitt@jlab.org>
- *  Some changes Copyright (C) 1996-99 Jon Nelson <jnelson@boa.org>
+ *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
+ *  Some changes Copyright (C) 1996,99 Larry Doolittle <ldoolitt@boa.org>
+ *  Some changes Copyright (C) 1996-2002 Jon Nelson <jnelson@boa.org>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,10 +20,9 @@
  *
  */
 
-/* $Id: get.c,v 1.70 2001/10/20 02:57:05 jnelson Exp $*/
+/* $Id: get.c,v 1.76 2002/03/24 22:32:39 jnelson Exp $*/
 
 #include "boa.h"
-#include <sys/mman.h>
 
 /* local prototypes */
 int get_cachedir_file(request * req, struct stat *statbuf);
@@ -40,15 +39,17 @@ int index_directory(request * req, char *dest_filename);
 
 int init_get(request * req)
 {
-    int data_fd;
+    int data_fd, saved_errno;
     struct stat statbuf;
+    int bytes;
 
     data_fd = open(req->pathname, O_RDONLY);
-
-    if (data_fd == -1) {        /* cannot open */
-        /* it's either a gunzipped file or a directory */
+    saved_errno = errno; /* might not get used */
 
 #ifdef GUNZIP
+    if (data_fd == -1 && errno == ENOENT) {
+        /* cannot open */
+        /* it's either a gunzipped file or a directory */
         char gzip_pathname[MAX_PATH_LENGTH];
         int len;
 
@@ -58,42 +59,42 @@ int init_get(request * req)
         memcpy(gzip_pathname + len, ".gz", 3);
         gzip_pathname[len + 3] = '\0';
         data_fd = open(gzip_pathname, O_RDONLY);
-        if (data_fd == -1) {
-#endif
-            int errno_save = errno;
-            log_error_doc(req);
-            errno = errno_save;
-            perror("document open");
-            errno = errno_save;
+        if (data_fd != -1) {
+            close(data_fd);
 
-            if (errno == ENOENT)
-                send_r_not_found(req);
-            else if (errno == EACCES)
-                send_r_forbidden(req);
-            else
-                send_r_bad_request(req);
-            return 0;
-#ifdef GUNZIP
+            req->response_status = R_REQUEST_OK;
+            if (!req->simple) {
+                req_write(req, "HTTP/1.0 200 OK-GUNZIP\r\n");
+                print_http_headers(req);
+                print_content_type(req);
+                print_last_modified(req);
+                req_write(req, "\r\n");
+                req_flush(req);
+            }
+            if (req->method == M_HEAD)
+                return 0;
+            if (req->pathname)
+                free(req->pathname);
+            req->pathname = strdup(gzip_pathname);
+            return init_cgi(req);
         }
-        close(data_fd);
-
-        req->response_status = R_REQUEST_OK;
-        if (!req->simple) {
-            req_write(req, "HTTP/1.0 200 OK-GUNZIP\r\n");
-            print_http_headers(req);
-            print_content_type(req);
-            print_last_modified(req);
-            req_write(req, "\r\n");
-            req_flush(req);
-        }
-        if (req->method == M_HEAD)
-            return 0;
-        if (req->pathname)
-            free(req->pathname);
-        req->pathname = strdup(gzip_pathname);
-        return init_cgi(req);
-#endif
     }
+#endif
+
+    if (data_fd == -1) {
+        log_error_doc(req);
+        errno = saved_errno;
+        perror("document open");
+
+        if (saved_errno == ENOENT)
+            send_r_not_found(req);
+        else if (saved_errno == EACCES)
+            send_r_forbidden(req);
+        else
+            send_r_bad_request(req);
+        return 0;
+    }
+
     fstat(data_fd, &statbuf);
 
     if (S_ISDIR(statbuf.st_mode)) { /* directory */
@@ -108,7 +109,7 @@ int init_get(request * req)
             else
                 sprintf(buffer, "http://%s%s/", server_name,
                         req->request_uri);
-            send_redirect_perm(req, buffer);
+            send_r_moved_perm(req, buffer);
             return 0;
         }
         data_fd = get_dir(req, &statbuf); /* updates statbuf */
@@ -129,7 +130,7 @@ int init_get(request * req)
     req->filesize = statbuf.st_size;
     req->last_modified = statbuf.st_mtime;
 
-    if (req->method == M_HEAD) {
+    if (req->method == M_HEAD || req->filesize == 0) {
         send_r_request_ok(req);
         close(data_fd);
         return 0;
@@ -146,9 +147,27 @@ int init_get(request * req)
         return 1;
     }
 
+    if (req->filesize == 0) {  /* done */
+        send_r_request_ok(req);     /* All's well *so far* */
+        close(data_fd);
+        return 1;
+    }
+
+    /* NOTE: I (Jon Nelson) tried performing a read(2)
+     * into the output buffer provided the file data would
+     * fit, before mmapping, and if successful, writing that
+     * and stopping there -- all to avoid the cost
+     * of a mmap.  Oddly, it was *slower* in benchmarks.
+     */
     req->mmap_entry_var = find_mmap(data_fd, &statbuf);
     if (req->mmap_entry_var == NULL) {
-        send_r_error(req);
+        req->buffer_end = 0;
+        if (errno == ENOENT)
+            send_r_not_found(req);
+        else if (errno == EACCES)
+            send_r_forbidden(req);
+        else
+            send_r_bad_request(req);
         close(data_fd);
         return 0;
     }
@@ -161,26 +180,23 @@ int init_get(request * req)
     }
 
     send_r_request_ok(req);     /* All's well */
-    {                           /* combine first part of file with headers */
-        int bob;
 
-        bob = BUFFER_SIZE - req->buffer_end;
-        /* bob is now how much the buffer can hold
-         * after the headers
-         */
+    bytes = BUFFER_SIZE - req->buffer_end;
 
-        if (bob > 0) {
-            if (bob > req->filesize)
-                bob = req->filesize;
+    /* bytes is now how much the buffer can hold
+     * after the headers
+     */
 
-            memcpy(req->buffer + req->buffer_end, req->data_mem, bob);
-            req->buffer_end += bob;
-            req->filepos += bob;
-            if (req->filesize == req->filepos) {
-                req_flush(req);
-                req->status = DONE;
-                return 1;       /* get it flushed next time around if need be */
-            }
+    if (bytes > 0) {
+        if (bytes > req->filesize)
+            bytes = req->filesize;
+
+        memcpy(req->buffer + req->buffer_end, req->data_mem, bytes);
+        req->buffer_end += bytes;
+        req->filepos += bytes;
+        if (req->filesize == req->filepos) {
+            req_flush(req);
+            req->status = DONE;
         }
     }
 
@@ -267,8 +283,16 @@ int get_dir(request * req, struct stat *statbuf)
         if (errno == EACCES) {
             send_r_forbidden(req);
             return -1;
+        } else if (errno != ENOENT) {
+            /* if there is an error *other* than EACCES or ENOENT */
+            send_r_not_found(req);
+            return -1;
         }
+
 #ifdef GUNZIP
+        /* if we are here, trying index.html didn't work
+         * try index.html.gz
+         */
         strcat(pathname_with_index, ".gz");
         data_fd = open(pathname_with_index, O_RDONLY);
         if (data_fd != -1) {    /* user's index file */

@@ -1,7 +1,7 @@
 /*
  *  Boa, an http server
- *  Copyright (C) 1995 Paul Phillips <psp@well.com>
- *  Some changes Copyright (C) 1996,97 Larry Doolittle <ldoolitt@jlab.org>
+ *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
+ *  Some changes Copyright (C) 1996,97 Larry Doolittle <ldoolitt@boa.org>
  *  Some changes Copyright (C) 1996 Charles F. Randall <crandall@goldsys.com>
  *  Some changes Copyright (C) 1996-99 Jon Nelson <jnelson@boa.org>
  *
@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: util.c,v 1.46 2001/07/18 03:43:38 jnelson Exp $ */
+/* $Id: util.c,v 1.61 2002/03/24 23:15:04 jnelson Exp $ */
 
 #include "boa.h"
 
@@ -32,43 +32,6 @@
 const char month_tab[48] =
     "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec ";
 const char day_tab[] = "Sun,Mon,Tue,Wed,Thu,Fri,Sat,";
-
-/*
- * Name: strstr and strdup
- *
- * These are the standard library utilities.  We define them here for
- * systems that don't have them.
- */
-#ifndef HAVE_STRSTR
-char *strstr(char *s1, char *s2)
-{                               /* from libiberty */
-    register char *p;
-    register int len = strlen(s2);
-
-    if (*s2 == '\0')            /* everything matches empty string */
-        return s1;
-    for (p = s1; (p = strchr(p, *s2)) != NULL; p = strchr(p + 1, *s2)) {
-        if (strncmp(p, s2, len) == 0)
-            return (p);
-    }
-    return NULL;
-}
-#endif
-
-#ifndef HAVE_STRDUP
-char *strdup(char *s)
-{
-    char *retval;
-
-    retval = (char *) malloc(strlen(s) + 1);
-    if (retval == NULL) {
-        perror("boa: out of memory in strdup");
-        exit(1);
-    }
-    return strcpy(retval, s);
-}
-#endif
-
 
 /*
  * Name: clean_pathname
@@ -117,6 +80,9 @@ void clean_pathname(char *pathname)
  * making 29 characters
  * "[27/Feb/1998:20:20:04 +0000] "
  *
+ * Constrast with rfc822 time:
+ * "Sun, 06 Nov 1994 08:49:37 GMT"
+ *
  * Altered 10 Jan 2000 by Jon Nelson ala Drew Streib for non UTC logging
  *
  */
@@ -131,7 +97,7 @@ char *get_commonlog_time(void)
 
     if (use_localtime) {
         t = localtime(&current_time);
-        time_offset = timezone;
+        time_offset = TIMEZONE_OFFSET(t);
     } else {
         t = gmtime(&current_time);
         time_offset = 0;
@@ -223,6 +189,7 @@ int month2int(char *monthname)
  Sun, 06 Nov 1994 08:49:37 GMT    ; RFC 822, updated by RFC 1123
  Sunday, 06-Nov-94 08:49:37 GMT   ; RFC 850, obsoleted by RFC 1036
  Sun Nov  6 08:49:37 1994         ; ANSI C's asctime() format
+ 31 September 2000 23:59:59 GMT   ; non-standard
 
  * RETURN VALUES:
  *  0: File has not been modified since specified time.
@@ -234,7 +201,7 @@ int modified_since(time_t * mtime, char *if_modified_since)
 {
     struct tm *file_gmt;
     char *ims_info;
-    char monthname[3 + 1];
+    char monthname[10 + 1];
     int day, month, year, hour, minute, second;
     int comp;
 
@@ -252,6 +219,12 @@ int modified_since(time_t * mtime, char *if_modified_since)
         year += 1900;
     else if (sscanf(ims_info, " %3s %d %d:%d:%d %d", /* asctime() format */
                     monthname, &day, &hour, &minute, &second, &year) == 6);
+    /*  allow this non-standard date format: 31 September 2000 23:59:59 GMT */
+    /* NOTE: Use if_modified_since here, because the date *starts*
+     *       with the day, versus a throwaway item
+     */
+    else if (sscanf(if_modified_since, "%d %10s %d %d:%d:%d GMT",
+                    &day, monthname, &year, &hour, &minute, &second) == 6);
     else {
         log_error_time();
         fprintf(stderr, "Error in %s, line %d: Unable to sscanf \"%s\"\n",
@@ -263,7 +236,7 @@ int modified_since(time_t * mtime, char *if_modified_since)
     month = month2int(monthname);
 
     /* Go through from years to seconds -- if they are ever unequal,
-       we know which one is newer and can return */
+     we know which one is newer and can return */
 
     if ((comp = 1900 + file_gmt->tm_year - year))
         return (comp > 0);
@@ -413,10 +386,14 @@ void rfc822_time_buf(char *buf, time_t s)
     memcpy(p, day_tab + t->tm_wday * 4, 4);
 }
 
-char *simple_itoa(int i)
+char *simple_itoa(unsigned int i)
 {
-    /* 21 digits plus null terminator, good for 64-bit or smaller ints */
-    /* for bigger ints, use a bigger buffer! */
+    /* 21 digits plus null terminator, good for 64-bit or smaller ints
+     * for bigger ints, use a bigger buffer!
+     *
+     * 4294967295 is, incidentally, MAX_UINT (on 32bit systems at this time)
+     * and is 10 bytes long
+     */
     static char local[22];
     char *p = &local[21];
     *p-- = '\0';
@@ -425,4 +402,152 @@ char *simple_itoa(int i)
         i /= 10;
     } while (i > 0);
     return p + 1;
+}
+
+/* I don't "do" negative conversions
+ * Therefore, -1 indicates error
+ */
+
+int boa_atoi(char *s)
+{
+    int retval;
+    char *reconv;
+
+    if (!isdigit(*s))
+        return -1;
+
+    retval = atoi(s);
+    if (retval < 0)
+        return -1;
+
+    reconv = simple_itoa(retval);
+    if (memcmp(s,reconv,strlen(s)) != 0) {
+        return -1;
+    }
+    return retval;
+}
+
+int create_temporary_file(short want_unlink, char *storage, int size)
+{
+    static char boa_tempfile[MAX_PATH_LENGTH + 1];
+    int fd;
+
+    snprintf(boa_tempfile, MAX_PATH_LENGTH,
+             "%s/boa-temp.XXXXXX", tempdir);
+
+    /* open temp file */
+    fd = mkstemp(boa_tempfile);
+    if (fd == -1) {
+        log_error_time();
+        perror("mkstemp");
+        return 0;
+    }
+
+    if (storage != NULL) {
+        int len = strlen(boa_tempfile);
+
+        if (len < size) {
+            memcpy(storage, boa_tempfile, len + 1);
+        } else {
+            close(fd);
+            fd = 0;
+            log_error_time();
+            fprintf(stderr, "not enough memory for memcpy in storage\n");
+            want_unlink = 1;
+        }
+    }
+
+    if (want_unlink) {
+        if (unlink(boa_tempfile) == -1) {
+            close(fd);
+            fd = 0;
+            log_error_time();
+            fprintf(stderr, "unlink temp file\n");
+        }
+    }
+
+    return (fd);
+}
+
+/*
+ * Name: normalize_path
+ *
+ * Description: Makes sure relative paths are made absolute
+ *
+ */
+
+#define DIRBUF_SIZE MAX_PATH_LENGTH * 2 + 1
+char * normalize_path(char *path)
+{
+    char dirbuf[DIRBUF_SIZE];
+    int len1, len2;
+    char *endpath;
+
+    if (path[0] == '/')
+        return strdup(path);
+
+#ifndef HAVE_GETCWD
+    perror("boa: getcwd() not defined. Aborting.");
+    exit(1);
+#endif
+    if (getcwd(dirbuf, DIRBUF_SIZE) == NULL) {
+        if (errno == ERANGE)
+            perror
+                ("boa: getcwd() failed - unable to get working directory. "
+                 "Aborting.");
+        else if (errno == EACCES)
+            perror("boa: getcwd() failed - No read access in current "
+                   "directory. Aborting.");
+        else
+            perror("boa: getcwd() failed - unknown error. Aborting.");
+        exit(1);
+    }
+
+    /* OK, now the hard part. */
+    len1 = strlen(dirbuf);
+    len2 = strlen(path);
+    if (len1 + len2 > MAX_PATH_LENGTH * 2) {
+        perror("boa: eek. unable to normalize pathname");
+        exit(1);
+    }
+    if (strcmp(path,".") != 0) {
+        memcpy(dirbuf + len1, "/", 1);
+        memcpy(dirbuf + len1 + 1, path, len2 + 1);
+    }
+    /* fprintf(stderr, "boa: normalize gets \"%s\"\n", dirbuf); */
+
+    endpath = strdup(dirbuf);
+
+    if (endpath == NULL) {
+        fprintf(stderr,
+                "boa: Cannot strdup path. Aborting.\n");
+        exit(1);
+    }
+    return endpath;
+}
+
+int real_set_block_fd(int fd)
+{
+    int flags;
+
+    flags = fcntl(fd, F_GETFL);
+    if (flags == -1)
+        return -1;
+
+    flags &= ~O_NONBLOCK;
+    flags = fcntl(fd, F_SETFL, flags);
+    return flags;
+}
+
+int real_set_nonblock_fd(int fd)
+{
+    int flags;
+
+    flags = fcntl(fd, F_GETFL);
+    if (flags == -1)
+        return -1;
+
+    flags |= O_NONBLOCK;
+    flags = fcntl(fd, F_SETFL, flags);
+    return flags;
 }

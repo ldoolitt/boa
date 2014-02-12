@@ -1,6 +1,6 @@
 /*
  *  Boa, an http server
- *  Copyright (C) 1995 Paul Phillips <psp@well.com>
+ *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
  *  Some changes Copyright (C) 1997 Jon Nelson <jnelson@boa.org>
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -19,7 +19,7 @@
  *
  */
 
-/* $Id: queue.c,v 1.18 2000/02/12 21:52:45 jon Exp $*/
+/* $Id: queue.c,v 1.21 2002/01/21 02:19:16 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -29,7 +29,7 @@ request *request_free = NULL;   /* free list head */
 
 /*
  * Name: block_request
- * 
+ *
  * Description: Moves a request from the ready queue to the blocked queue
  */
 
@@ -39,29 +39,30 @@ void block_request(request * req)
     enqueue(&request_block, req);
 
     if (req->buffer_end) {
-        FD_SET(req->fd, &block_write_fdset);
+        BOA_FD_SET(req->fd, &block_write_fdset);
     } else {
         switch (req->status) {
         case WRITE:
         case PIPE_WRITE:
         case DONE:
-            FD_SET(req->fd, &block_write_fdset);
+            BOA_FD_SET(req->fd, &block_write_fdset);
             break;
         case PIPE_READ:
-            FD_SET(req->data_fd, &block_read_fdset);
+            BOA_FD_SET(req->data_fd, &block_read_fdset);
             break;
         case BODY_WRITE:
-            FD_SET(req->post_data_fd, &block_write_fdset);
+            BOA_FD_SET(req->post_data_fd, &block_write_fdset);
             break;
         default:
-            FD_SET(req->fd, &block_read_fdset);
+            BOA_FD_SET(req->fd, &block_read_fdset);
+            break;
         }
     }
 }
 
 /*
  * Name: ready_request
- * 
+ *
  * Description: Moves a request from the blocked queue to the ready queue
  */
 
@@ -94,7 +95,7 @@ void ready_request(request * req)
 
 /*
  * Name: dequeue
- * 
+ *
  * Description: Removes a request from its current queue
  */
 
@@ -114,7 +115,7 @@ void dequeue(request ** head, request * req)
 
 /*
  * Name: enqueue
- * 
+ *
  * Description: Adds a request to the head of a queue
  */
 

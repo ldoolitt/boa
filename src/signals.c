@@ -1,7 +1,7 @@
 /*
  *  Boa, an http server
- *  Copyright (C) 1995 Paul Phillips <psp@well.com>
- *  Some changes Copyright (C) 1996 Larry Doolittle <ldoolitt@jlab.org>
+ *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
+ *  Some changes Copyright (C) 1996 Larry Doolittle <ldoolitt@boa.org>
  *  Some changes Copyright (C) 1996-99 Jon Nelson <jnelson@boa.org>
  *  Some changes Copyright (C) 1997 Alain Magloire <alain.magloire@rcsm.ee.mcgill.ca>
  *
@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: signals.c,v 1.29 2001/09/19 01:19:38 jnelson Exp $*/
+/* $Id: signals.c,v 1.37 2002/03/24 23:14:46 jnelson Exp $*/
 
 #include "boa.h"
 #ifdef HAVE_SYS_WAIT_H
@@ -93,6 +93,7 @@ void init_signals(void)
 
 void sigsegv(int dummy)
 {
+    time(&current_time);
     log_error_time();
     fprintf(stderr, "caught SIGSEGV, dumping core in %s\n", tempdir);
     fclose(stderr);
@@ -102,6 +103,7 @@ void sigsegv(int dummy)
 
 void sigbus(int dummy)
 {
+    time(&current_time);
     log_error_time();
     fprintf(stderr, "caught SIGBUS, dumping core in %s\n", tempdir);
     fclose(stderr);
@@ -111,17 +113,34 @@ void sigbus(int dummy)
 
 void sigterm(int dummy)
 {
-    lame_duck_mode = 1;
+    sigterm_flag = 1;
 }
 
-void lame_duck_mode_run(int server_s)
+void sigterm_stage1_run(int server_s) /* lame duck mode */
 {
+    time(&current_time);
     log_error_time();
     fputs("caught SIGTERM, starting shutdown\n", stderr);
     FD_CLR(server_s, &block_read_fdset);
     close(server_s);
-    lame_duck_mode = 2;
+    sigterm_flag = 2;
 }
+
+void sigterm_stage2_run() /* lame duck mode */
+{
+    log_error_time();
+    fprintf(stderr,
+            "exiting Boa normally (uptime %d seconds)\n",
+            (int) (current_time - start_time));
+    chdir(tempdir);
+    clear_common_env();
+    dump_mime();
+    dump_passwd();
+    dump_alias();
+    free_requests();
+    exit(0);
+}
+
 
 void sighup(int dummy)
 {
@@ -131,6 +150,7 @@ void sighup(int dummy)
 void sighup_run(void)
 {
     sighup_flag = 0;
+    time(&current_time);
     log_error_time();
     fputs("caught SIGHUP, restarting\n", stderr);
 
@@ -138,6 +158,9 @@ void sighup_run(void)
      * since usual permission structure prevents such reopening.
      */
 
+    FD_ZERO(&block_read_fdset);
+    FD_ZERO(&block_write_fdset);
+    /* clear_common_env(); NEVER DO THIS */
     dump_mime();
     dump_passwd();
     dump_alias();
@@ -149,10 +172,12 @@ void sighup_run(void)
 
     log_error_time();
     fputs("successful restart\n", stderr);
+
 }
 
 void sigint(int dummy)
 {
+    time(&current_time);
     log_error_time();
     fputs("caught SIGINT: shutting down\n", stderr);
     fclose(stderr);
@@ -174,16 +199,24 @@ void sigchld_run(void)
 
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0)
         if (verbose_cgi_logs) {
+            time(&current_time);
             log_error_time();
-            fprintf(stderr, "reaping child %d: status %d\n", pid, status);
+            fprintf(stderr, "reaping child %d: status %d\n", (int) pid, status);
         }
     return;
 }
 
 void sigalrm(int dummy)
 {
+    sigalrm_flag = 1;
+}
+
+void sigalrm_run(void)
+{
+    time(&current_time);
     log_error_time();
     fprintf(stderr, "%ld requests, %ld errors\n",
             status.requests, status.errors);
-    alarm(60 * 60);
+    show_hash_stats();
+    sigalrm_flag = 0;
 }

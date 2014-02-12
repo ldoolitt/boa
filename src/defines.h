@@ -1,6 +1,6 @@
 /*
  *  Boa, an http server
- *  Copyright (C) 1995 Paul Phillips <psp@well.com>
+ *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
  *  Some changes Copyright (C) 1997 Jon Nelson <jnelson@boa.org>
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -19,7 +19,7 @@
  *
  */
 
-/* $Id: defines.h,v 1.90 2001/11/02 04:37:46 jnelson Exp $*/
+/* $Id: defines.h,v 1.107 2002/05/05 01:15:05 jnelson Exp $*/
 
 #ifndef _DEFINES_H
 #define _DEFINES_H
@@ -29,6 +29,12 @@
 #ifndef SERVER_ROOT
 #define SERVER_ROOT "/etc/boa"
 #endif
+
+/***** Change this via the CGIPath configuration value in boa.conf *****/
+#define DEFAULT_PATH     "/bin:/usr/bin:/usr/local/bin"
+
+/***** Change this via the SinglePostLimit configuration value in boa.conf *****/
+#define SINGLE_POST_LIMIT_DEFAULT               1024 * 1024 /* 1 MB */
 
 /***** Various stuff that you may want to tweak, but probably shouldn't *****/
 
@@ -43,8 +49,7 @@
 
 #define REQUEST_TIMEOUT				60
 
-#define CGI_MIME_TYPE    "application/x-httpd-cgi"
-#define DEFAULT_PATH     "/bin:/usr/bin:/usr/local/bin"
+#define CGI_MIME_TYPE                           "application/x-httpd-cgi"
 
 /***** CHANGE ANYTHING BELOW THIS LINE AT YOUR OWN PERIL *****/
 /***** You will probably introduce buffer overruns unless you know
@@ -62,11 +67,11 @@
 #endif
 
 #ifndef SERVER_VERSION
-#define SERVER_VERSION 				"Boa/0.94.11"
+#define SERVER_VERSION 				"Boa/0.94.12"
 #endif
 
 #define CGI_VERSION				"CGI/1.1"
-#define COMMON_CGI_COUNT 8
+#define COMMON_CGI_COUNT 6
 #define CGI_ENV_MAX     50
 #define CGI_ARGC_MAX 128
 
@@ -187,5 +192,23 @@
 #define MMAP_LIST_HASH(dev,ino,size) ((ino)&MMAP_LIST_MASK)
 
 #define MAX_FILE_MMAP 100 * 1024 /* 100K */
+
+
+#define BOA_FD_SET(fd, where) { FD_SET(fd, where); \
+    if (fd > max_fd) max_fd = fd; \
+    }
+
+/* If and when everyone has a modern gcc or other near-C99 compiler,
+ * change these to static inline functions. Also note that since
+ * we never fuss with O_APPEND append or O_ASYNC, we don't have
+ * to perform an extra system call to F_GETFL first. */
+
+#ifdef BOA_USE_GETFL
+#define set_block_fd(fd)    real_set_block_fd(fd)
+#define set_nonblock_fd(fd) real_set_nonblock_fd(fd)
+#else
+#define set_block_fd(fd)    fcntl(fd, F_SETFL, 0)
+#define set_nonblock_fd(fd) fcntl(fd, F_SETFL, NOBLOCK)
+#endif
 
 #endif

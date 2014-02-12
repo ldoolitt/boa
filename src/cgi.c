@@ -1,9 +1,9 @@
 /*
  *  Boa, an http server
- *  Copyright (C) 1995 Paul Phillips <psp@well.com>
- *  Some changes Copyright (C) 1996,97 Larry Doolittle <ldoolitt@jlab.org>
+ *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
+ *  Some changes Copyright (C) 1996,97 Larry Doolittle <ldoolitt@boa.org>
  *  Some changes Copyright (C) 1996 Charles F. Randall <crandall@goldsys.com>
- *  Some changes Copyright (C) 1997-99 Jon Nelson <jnelson@boa.org>
+ *  Some changes Copyright (C) 1997-2002 Jon Nelson <jnelson@boa.org>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -21,13 +21,15 @@
  *
  */
 
-/* $Id: cgi.c,v 1.70 2001/07/18 03:41:44 jnelson Exp $ */
+/* $Id: cgi.c,v 1.83 2002/03/24 23:14:30 jnelson Exp $ */
 
 #include "boa.h"
 
-int verbose_cgi_logs = 0;
+static char *env_gen_extra(const char *key, const char *value, int extra);
 
-static char **common_cgi_env;
+int verbose_cgi_logs = 0;
+/* The +1 is for the the NULL in complete_env */
+static char *common_cgi_env[COMMON_CGI_COUNT + 1];
 
 /*
  * Name: create_common_env
@@ -38,18 +40,13 @@ static char **common_cgi_env;
 
 void create_common_env()
 {
-    int index = 0;
+    int index = 0, i;
 
-    common_cgi_env =
-        (char **) malloc(sizeof (char *) * COMMON_CGI_COUNT + 4);
-    /* The +4 is to handle the extra 3 environment variables + the NULL in
-       complete_env
-     */
 
     /* NOTE NOTE NOTE:
        If you (the reader) someday modify this chunk of code to
        handle more "common" CGI environment variables, then bump the
-       value in defines.h UP
+       value COMMON_CGI_COUNT in defines.h UP
 
        Also, in the case of document_root and server_admin, two variables
        that may or may not be defined depending on the way the server
@@ -60,84 +57,50 @@ void create_common_env()
        "In all cases, a missing environment variable is
        equivalent to a zero-length (NULL) value, and vice versa."
      */
-    common_cgi_env[index++] = env_gen("PATH", DEFAULT_PATH);
-    common_cgi_env[index++] = env_gen("SERVER_SOFTWARE", SERVER_VERSION);
-    common_cgi_env[index++] = env_gen("SERVER_NAME", server_name);
-    common_cgi_env[index++] = env_gen("GATEWAY_INTERFACE", CGI_VERSION);
+    common_cgi_env[index++] = env_gen_extra("PATH",
+                                            ((cgi_path != NULL) ? cgi_path : DEFAULT_PATH), 0);
+    common_cgi_env[index++] = env_gen_extra("SERVER_SOFTWARE", SERVER_VERSION, 0);
+    common_cgi_env[index++] = env_gen_extra("SERVER_NAME", server_name, 0);
+    common_cgi_env[index++] = env_gen_extra("GATEWAY_INTERFACE", CGI_VERSION, 0);
     common_cgi_env[index++] =
-        env_gen("SERVER_PORT", simple_itoa(server_port));
+        env_gen_extra("SERVER_PORT", simple_itoa(server_port), 0);
 
     /* NCSA and APACHE added -- not in CGI spec */
-    common_cgi_env[index++] = env_gen("DOCUMENT_ROOT", document_root);
+    /* common_cgi_env[index++] = env_gen_extra("DOCUMENT_ROOT", document_root); */
 
     /* NCSA added */
-    common_cgi_env[index++] = env_gen("SERVER_ROOT", server_root);
+    /* common_cgi_env[index++] = env_gen_extra("SERVER_ROOT", server_root); */
 
     /* APACHE added */
-    common_cgi_env[index++] = env_gen("SERVER_ADMIN", server_admin);
+    common_cgi_env[index++] = env_gen_extra("SERVER_ADMIN", server_admin, 0);
     common_cgi_env[index] = NULL;
+
+    /* Sanity checking -- make *sure* the memory got allocated */
+    if (index > COMMON_CGI_COUNT) {
+        log_error_time();
+        fprintf(stderr, "COMMON_CGI_COUNT not high enough.\n");
+        exit(1);
+    }
+
+    for(i = 0;i < index;++i) {
+        if (common_cgi_env[i] == NULL) {
+            log_error_time();
+            fprintf(stderr, "Unable to allocate a component of common_cgi_env - out of memory.\n");
+            exit(1);
+        }
+    }
 }
 
-/*
- * Name: create_env
- *
- * Description: Allocates memory for environment before execing a CGI
- * script.  I like spelling creat with an extra e, don't you?
- */
-
-void create_env(request * req)
+void clear_common_env(void)
 {
     int i;
 
-    req->cgi_env = (char **) malloc(sizeof (char *) * CGI_ENV_MAX + 4);
-
-    for (i = 0; common_cgi_env[i]; i++)
-        req->cgi_env[i] = common_cgi_env[i];
-
-    req->cgi_env_index = i;
-
-    {
-        char *w;
-
-        switch (req->method) {
-        case M_POST:
-            w = "POST";
-            break;
-        case M_HEAD:
-            w = "HEAD";
-            break;
-        case M_GET:
-            w = "GET";
-            break;
-        default:
-            w = "UNKNOWN";
-            break;
+    for(i = 0;i <= COMMON_CGI_COUNT;++i) {
+        if (common_cgi_env[i] != NULL) {
+            free(common_cgi_env[i]);
+            common_cgi_env[i] = NULL;
         }
-        req->cgi_env[req->cgi_env_index++] = env_gen("REQUEST_METHOD", w);
     }
-
-    req->cgi_env[req->cgi_env_index++] =
-        env_gen("SERVER_PROTOCOL", req->http_version);
-
-    if (req->path_info) {
-        req->cgi_env[req->cgi_env_index++] =
-            env_gen("PATH_INFO", req->path_info);
-        /* path_translated depends upon path_info */
-        req->cgi_env[req->cgi_env_index++] =
-            env_gen("PATH_TRANSLATED", req->path_translated);
-    }
-    req->cgi_env[req->cgi_env_index++] =
-        env_gen("SCRIPT_NAME", req->script_name);
-
-    if (req->query_string) {
-        req->cgi_env[req->cgi_env_index++] =
-            env_gen("QUERY_STRING", req->query_string);
-    }
-    req->cgi_env[req->cgi_env_index++] =
-        env_gen("REMOTE_ADDR", req->remote_ip_addr);
-
-    req->cgi_env[req->cgi_env_index++] =
-        env_gen("REMOTE_PORT", simple_itoa(req->remote_port));
 }
 
 /*
@@ -145,7 +108,7 @@ void create_env(request * req)
  *       (and via a not-so-tricky #define, env_gen)
  * This routine calls malloc: please free the memory when you are done
  */
-char *env_gen_extra(const char *key, const char *value, int extra)
+static char *env_gen_extra(const char *key, const char *value, int extra)
 {
     char *result;
     int key_len, value_len;
@@ -161,6 +124,13 @@ char *env_gen_extra(const char *key, const char *value, int extra)
         *(result + extra + key_len) = '=';
         memcpy(result + extra + key_len + 1, value, value_len);
         *(result + extra + key_len + value_len + 1) = '\0';
+    } else {
+        log_error_time();
+        log_error_mesg(__FILE__, __LINE__, "not enough memory for env_gen_extra! Not fatal.\n");
+        log_error_time();
+        fprintf(stderr,
+                "tried to allocate (key=value) extra=%d: %s=%s\n",
+                extra, key, value);
     }
     return result;
 }
@@ -172,20 +142,40 @@ char *env_gen_extra(const char *key, const char *value, int extra)
  * Used for HTTP_ headers
  */
 
-void add_cgi_env(request * req, char *key, char *value)
+int add_cgi_env(request * req, char *key, char *value, int http_prefix)
 {
     char *p;
+    int prefix_len;
+
+    if (http_prefix) {
+        prefix_len = 5;
+    } else {
+        prefix_len = 0;
+    }
 
     if (req->cgi_env_index < CGI_ENV_MAX) {
-        p = env_gen_extra(key, value, 5);
-        memcpy(p, "HTTP_", 5);
+        p = env_gen_extra(key, value, prefix_len);
+        if (!p) {
+            log_error_time();
+            fprintf(stderr, "Unable to generate additional CGI Environment"
+                    "variable -- ran out of memory!\n");
+        }
+        if (prefix_len)
+            memcpy(p, "HTTP_", 5);
         req->cgi_env[req->cgi_env_index++] = p;
+        return 1;
     } else {
         log_error_time();
         fprintf(stderr, "Unable to generate additional CGI Environment"
                 "variable -- not enough space!\n");
     }
+    return 0;
 }
+
+#define my_add_cgi_env(req, key, value) { \
+    int ok = add_cgi_env(req, key, value, 0); \
+    if (!ok) return 0; \
+    }
 
 /*
  * Name: complete_env
@@ -194,32 +184,74 @@ void add_cgi_env(request * req, char *key, char *value)
  * and terminates the environment array
  */
 
-void complete_env(request * req)
+int complete_env(request * req)
 {
-    if (req->method == M_POST) {
-        if (req->content_type)
-            req->cgi_env[req->cgi_env_index++] =
-                env_gen("CONTENT_TYPE", req->content_type);
-        else
-            req->cgi_env[req->cgi_env_index++] =
-                env_gen("CONTENT_TYPE", default_type);
+    int i;
 
-        if (req->content_length) {
-            req->cgi_env[req->cgi_env_index++] =
-                env_gen("CONTENT_LENGTH", req->content_length);
+    for (i = 0; common_cgi_env[i]; i++)
+        req->cgi_env[i] = common_cgi_env[i];
+
+    {
+        char *w;
+        switch (req->method) {
+        case M_POST:
+            w = "POST";
+            break;
+        case M_HEAD:
+            w = "HEAD";
+            break;
+        case M_GET:
+            w = "GET";
+            break;
+        default:
+            w = "UNKNOWN";
+            break;
         }
+        my_add_cgi_env(req, "REQUEST_METHOD", w);
     }
+
+    my_add_cgi_env(req, "SERVER_PROTOCOL", req->http_version);
+
+    if (req->path_info)
+        my_add_cgi_env(req, "PATH_INFO", req->path_info);
+
+    if (req->path_translated)
+        /* while path_translated depends on path_info,
+         * there are cases when path_translated might
+         * not exist when path_info does
+         */
+        my_add_cgi_env(req, "PATH_TRANSLATED", req->path_translated);
+
+    my_add_cgi_env(req, "SCRIPT_NAME", req->script_name);
+
+    if (req->query_string)
+        my_add_cgi_env(req, "QUERY_STRING", req->query_string);
+    my_add_cgi_env(req, "REMOTE_ADDR", req->remote_ip_addr);
+    my_add_cgi_env(req, "REMOTE_PORT", simple_itoa(req->remote_port));
+
+    if (req->method == M_POST) {
+            if (req->content_type) {
+                my_add_cgi_env(req, "CONTENT_TYPE", req->content_type);
+            } else {
+                my_add_cgi_env(req, "CONTENT_TYPE", default_type);
+            }
+            if (req->content_length) {
+                my_add_cgi_env(req, "CONTENT_LENGTH", req->content_length);
+            }
+        }
 #ifdef ACCEPT_ON
-    if (req->accept[0]) {
-        req->cgi_env[req->cgi_env_index++] =
-            env_gen("HTTP_ACCEPT", req->accept);
-    }
+    if (req->accept[0])
+        my_add_cgi_env(req, "HTTP_ACCEPT", req->accept);
 #endif
-    if (req->header_referer) {
-        req->cgi_env[req->cgi_env_index++] =
-            env_gen("HTTP_REFERER", req->header_referer);
+
+    if (req->cgi_env_index < CGI_ENV_MAX + 1) {
+        req->cgi_env[req->cgi_env_index] = NULL; /* terminate */
+        return 1;
     }
-    req->cgi_env[req->cgi_env_index] = NULL; /* terminate */
+    log_error_time();
+    fprintf(stderr, "Not enough space in CGI environment for remainder"\
+            " of variables.\n");
+    return 0;
 }
 
 /*
@@ -322,11 +354,15 @@ int init_cgi(request * req)
 {
     int child_pid;
     int pipes[2];
+    int use_pipes = 0;
 
     SQUASH_KA(req);
 
-    if (req->is_cgi)
-        complete_env(req);
+    if (req->is_cgi) {
+        if (complete_env(req) == 0) {
+            return 0;
+        }
+    }
 #ifdef FASCIST_LOGGING
     {
         int i;
@@ -336,14 +372,29 @@ int init_cgi(request * req)
     }
 #endif
 
-    if (req->is_cgi == CGI)
-        pipe(pipes);
+    if (req->is_cgi == CGI || 1) {
+        use_pipes = 1;
+        if (pipe(pipes) == -1) {
+            log_error_time();
+            perror("pipe");
+            return 0;
+        }
+
+        /* set the read end of the socket to non-blocking */
+        if (set_nonblock_fd(pipes[0]) == -1) {
+            log_error_time();
+            perror("cgi-fcntl");
+            close(pipes[0]);
+            close(pipes[1]);
+            return 0;
+        }
+    }
 
     if ((child_pid = fork()) == -1) { /* fork unsuccessful */
         log_error_time();
         perror("fork");
 
-        if (req->is_cgi == CGI) {
+        if (use_pipes) {
             close(pipes[0]);
             close(pipes[1]);
         }
@@ -356,34 +407,56 @@ int init_cgi(request * req)
     /* if here, fork was successful */
 
     if (!child_pid) {           /* 0 == child */
-        if (req->is_cgi == CGI) {
+        if (req->is_cgi == CGI || req->is_cgi == NPH) {
+            char *foo = strdup(req->pathname);
+            char *c;
+            c = strrchr(foo, '/');
+            if (c) {
+                ++c;
+                *c = '\0';
+            } else {
+                /* we have a serious problem */
+                log_error_time();
+                perror("chdir");
+                if (use_pipes)
+                    close(pipes[1]);
+                _exit(1);
+            }
+            if (chdir(foo) != 0) {
+                log_error_time();
+                perror("chdir");
+                if (use_pipes)
+                    close(pipes[1]);
+                _exit(1);
+            }
+        }
+        if (use_pipes) {
             close(pipes[0]);
             /* tie cgi's STDOUT to it's write end of pipe */
             if (dup2(pipes[1], STDOUT_FILENO) == -1) {
                 log_error_time();
                 perror("dup2 - pipes");
                 close(pipes[1]);
-                exit(1);
-            }
-            if (fcntl(pipes[1], F_SETFL, 0) == -1) {
-                log_error_time();
-                perror("cgi-fcntl");
-                close(pipes[1]);
-                exit(1);
+                _exit(1);
             }
             close(pipes[1]);
+            if (set_block_fd(STDOUT_FILENO) == -1) {
+                log_error_time();
+                perror("cgi-fcntl");
+                _exit(1);
+            }
         } else {
             /* tie stdout to socket */
             if (dup2(req->fd, STDOUT_FILENO) == -1) {
                 log_error_time();
                 perror("dup2 - fd");
-                exit(1);
+                _exit(1);
             }
             /* Switch socket flags back to blocking */
-            if (fcntl(req->fd, F_SETFL, 0) == -1) {
+            if (set_block_fd(req->fd) == -1) {
                 log_error_time();
                 perror("cgi-fcntl");
-                exit(1);
+                _exit(1);
             }
         }
         /* tie post_data_fd to POST stdin */
@@ -404,7 +477,7 @@ int init_cgi(request * req)
          *  then we ought to close it.
          */
         if (!cgi_log_fd)
-            close(STDERR_FILENO);
+            dup2(devnullfd, STDERR_FILENO);
         else
             dup2(cgi_log_fd, STDERR_FILENO);
 
@@ -424,7 +497,7 @@ int init_cgi(request * req)
         }
         /* execve failed */
         log_error_mesg(__FILE__, __LINE__, req->pathname);
-        exit(1);
+        _exit(1);
     }
 
     /* if here, fork was successful */
@@ -440,7 +513,7 @@ int init_cgi(request * req)
     }
 
     /* NPH, GUNZIP, etc... all go straight to the fd */
-    if (req->is_cgi != CGI)
+    if (!use_pipes)
         return 0;
 
     close(pipes[1]);
@@ -461,13 +534,6 @@ int init_cgi(request * req)
     /* reset req->filepos for logging (it's used in pipe.c) */
     /* still don't know why req->filesize might be reset though */
     req->filepos = 0;
-
-    /* set the read end of the socket to non-blocking */
-    if (fcntl(pipes[0], F_SETFL, O_NONBLOCK) == -1) {
-        log_error_time();
-        perror("cgi-fcntl");
-        return 0;
-    }
 
     return 1;
 }

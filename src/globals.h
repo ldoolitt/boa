@@ -1,6 +1,6 @@
 /*
  *  Boa, an http server
- *  Copyright (C) 1995 Paul Phillips <psp@well.com>
+ *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
  *  Some changes Copyright (C) 1996,97 Larry Doolittle <ldoolitt@jlab.org>
  *  Some changes Copyright (C) 1997 Jon Nelson <jnelson@boa.org>
  *
@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: globals.h,v 1.54 2001/10/20 02:57:41 jnelson Exp $*/
+/* $Id: globals.h,v 1.65 2002/03/24 22:34:15 jnelson Exp $*/
 
 #ifndef _GLOBALS_H
 #define _GLOBALS_H
@@ -32,6 +32,17 @@ struct mmap_entry {
     int use_count;
     size_t len;
 };
+
+struct alias {
+    char *fakename;             /* URI path to file */
+    char *realname;             /* Actual path to file */
+    int type;                   /* ALIAS, SCRIPTALIAS, REDIRECT */
+    int fake_len;               /* strlen of fakename */
+    int real_len;               /* strlen of realname */
+    struct alias *next;
+};
+
+typedef struct alias alias;
 
 struct request {                /* pending requests */
     int fd;                     /* client's socket fd */
@@ -74,7 +85,6 @@ struct request {                /* pending requests */
 
     int is_cgi;                 /* true if CGI/NPH */
     int cgi_status;
-    char **cgi_env;             /* CGI environment */
     int cgi_env_index;          /* index into array */
 
     /* Agent and referer for logfiles */
@@ -99,6 +109,7 @@ struct request {                /* pending requests */
     char buffer[BUFFER_SIZE + 1]; /* generic I/O buffer */
     char request_uri[MAX_HEADER_LENGTH + 1]; /* uri */
     char client_stream[CLIENT_STREAM_SIZE]; /* data from client - fit or be hosed */
+    char *cgi_env[CGI_ENV_MAX + 4];             /* CGI environment */
 
 #ifdef ACCEPT_ON
     char accept[MAX_ACCEPT_LENGTH]; /* Accept: fields */
@@ -107,25 +118,12 @@ struct request {                /* pending requests */
 
 typedef struct request request;
 
-struct alias {
-    char *fakename;             /* URI path to file */
-    char *realname;             /* Actual path to file */
-    int type;                   /* ALIAS, SCRIPTALIAS, REDIRECT */
-    int fake_len;               /* strlen of fakename */
-    int real_len;               /* strlen of realname */
-    struct alias *next;
-};
-
-typedef struct alias alias;
-
 struct status {
     long requests;
     long errors;
 };
 
 struct status status;
-
-struct mmap_entry mmap_list[MMAP_LIST_SIZE];
 
 extern char *optarg;            /* For getopt */
 extern FILE *yyin;              /* yacc input */
@@ -154,6 +152,8 @@ extern char *server_admin;
 extern char *server_root;
 extern char *server_name;
 extern char *server_ip;
+extern int max_fd;
+extern int devnullfd;
 
 extern char *document_root;
 extern char *user_dir;
@@ -162,10 +162,10 @@ extern char *default_type;
 extern char *dirmaker;
 extern char *mime_types;
 extern char *cachedir;
-extern char *pidfile;
 
 extern char *tempdir;
 
+extern char *cgi_path;
 extern int single_post_limit;
 
 extern int ka_timeout;
@@ -173,7 +173,12 @@ extern int ka_max;
 
 extern int sighup_flag;
 extern int sigchld_flag;
-extern short lame_duck_mode;
+extern int sigalrm_flag;
+extern int sigterm_flag;
+extern time_t start_time;
+
+extern int pending_requests;
+extern int max_connections;
 
 extern int verbose_cgi_logs;
 
@@ -181,8 +186,6 @@ extern int backlog;
 extern time_t current_time;
 
 extern int virtualhost;
-
-extern char *chroot_path;
 
 extern int total_connections;
 

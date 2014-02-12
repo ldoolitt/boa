@@ -1,7 +1,7 @@
 
 /*
  *  Boa, an http server
- *  Based on code Copyright (C) 1995 Paul Phillips <psp@well.com>
+ *  Based on code Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
  *  Some changes Copyright (C) 1997-99 Jon Nelson <jnelson@boa.org>
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: pipe.c,v 1.38 2001/06/30 03:41:31 jnelson Exp $*/
+/* $Id: pipe.c,v 1.39 2002/01/21 02:19:16 jnelson Exp $*/
 
 #include "boa.h"
 

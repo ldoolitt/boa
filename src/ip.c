@@ -24,7 +24,7 @@
   The IPv6 code here is bsed on contributions from Martin Hinner <martin@tdp.cz>
   and Arkadiusz Miskiewicz <misiek@misiek.eu.org>.  This incarnation of that
   code is untested.  The original IPv4 code is based on original Boa code
-  from Paul Phillips <psp@well.com>.
+  from Paul Phillips <paulp@go2net.com>.
 
   A goal is to compile in as many families as are supported, and
   make the final choice at runtime.
@@ -43,12 +43,7 @@ globals.h:
     */
 
 #include "boa.h"
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>          /* inet_ntoa */
-#include <string.h>
-
 
 /* Binds to the existing server_s, based on the configuration string
    in server_ip.  IPv6 version doesn't pay attention to server_ip yet.  */
@@ -62,10 +57,7 @@ int bind_server(int server_s, char *server_ip)
 #else
     struct sockaddr_in server_sockaddr;
     memset(&server_sockaddr, 0, sizeof server_sockaddr);
-#ifdef BSD                      /* uncomment for BSDs */
-    /* NOTE:  This *will* get improved when the authors get a chance
-       to learn what a good #define to use is
-     */
+#ifdef HAVE_SIN_LEN             /* uncomment for BSDs */
     server_sockaddr.sin_len = sizeof server_sockaddr;
 #endif
     server_sockaddr.sin_family = AF_INET;
@@ -85,40 +77,35 @@ char *ascii_sockaddr(struct SOCKADDR *s, char *dest, int len)
 {
 #ifdef INET6
     if (getnameinfo((struct sockaddr *) s,
-                    SA_LEN((struct sockaddr *) s),
+                    sizeof(struct SOCKADDR),
                     dest, len, NULL, 0, NI_NUMERICHOST)) {
         fprintf(stderr, "[IPv6] getnameinfo failed\n");
         *dest = '\0';
-    } else {
-        conn->local_ip_addr = strdup(host);
     }
 #ifdef WHEN_DOES_THIS_APPLY
     if ((s->__ss_family == AF_INET6) &&
         IN6_IS_ADDR_V4MAPPED(&(((struct sockaddr_in6 *) s)->sin6_addr))) {
-        strncpy(dest, dest + 7, NI_MAXHOST);
+        memmove(dest, dest+7, NI_MAXHOST);
     }
 #endif
 #else
-    strncpy(dest, inet_ntoa(s->sin_addr), len);
+    memmove(dest, inet_ntoa(s->sin_addr), len);
 #endif
     return dest;
 }
 
 int net_port(struct SOCKADDR *s)
 {
-    int p;
+    int p = -1;
 #ifdef INET6
-    switch (s->__ss_family) {
-    case AF_INET:
-        p = ntohs(((struct sockaddr_in *) s)->sin_port);
-        break;
-    case AF_INET6:
-        p = ntohs(((struct sockaddr_in6 *) s)->sin6_port);
-        break;
-    default:
-        fprintf(stderr, "[IPv6] family isn't supported: %d\n",
-                s->__ss_family);
-        p = 0;
+    char serv[NI_MAXSERV];
+
+    if (getnameinfo((struct sockaddr *) s,
+                    sizeof(struct SOCKADDR),
+                    NULL, 0, serv, sizeof(serv), NI_NUMERICSERV)) {
+        fprintf(stderr, "[IPv6] getnameinfo failed\n");
+    } else {
+        p = atoi(serv);
     }
 #else
     p = ntohs(s->sin_port);

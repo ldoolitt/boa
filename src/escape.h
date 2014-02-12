@@ -1,6 +1,6 @@
 /*
  *  Boa, an http server
- *  Copyright (C) 1995 Paul Phillips <psp@well.com>
+ *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
  *  Copyright (C) 2001 Jon Nelson <jnelson@boa.org>
  *  Copyright (C) 2001 Larry Doolittle <ldoolitt@boa.org>
 
@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: escape.h,v 1.17 2001/11/05 00:38:08 jnelson Exp $ */
+/* $Id: escape.h,v 1.18 2002/01/31 03:12:21 jnelson Exp $ */
 
 #include "config.h"
 

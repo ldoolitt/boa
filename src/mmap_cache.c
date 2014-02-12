@@ -18,19 +18,23 @@
  *
  */
 
-/* $Id: mmap_cache.c,v 1.6 2000/02/12 21:52:45 jon Exp $*/
+/* $Id: mmap_cache.c,v 1.9 2002/03/24 22:35:34 jnelson Exp $*/
 
 #include "boa.h"
 
 int mmap_list_entries_used = 0;
 int mmap_list_total_requests = 0;
 int mmap_list_hash_bounces = 0;
+
+/* define local table variable */
+static struct mmap_entry mmap_list[MMAP_LIST_SIZE];
+
 struct mmap_entry *find_mmap(int data_fd, struct stat *s)
 {
     char *m;
-    int i, h, start = 0;
+    int i, start;
     mmap_list_total_requests++;
-    i = h = MMAP_LIST_HASH(s->st_dev, s->st_ino, s->st_size);
+    i = start = MMAP_LIST_HASH(s->st_dev, s->st_ino, s->st_size);
     for (; mmap_list[i].use_count;) {
         if (mmap_list[i].dev == s->st_dev &&
             mmap_list[i].ino == s->st_ino &&
@@ -39,7 +43,7 @@ struct mmap_entry *find_mmap(int data_fd, struct stat *s)
 #ifdef DEBUG
             fprintf(stderr,
                     "Old mmap_list entry %d use_count now %d (hash was %d)\n",
-                    i, mmap_list[i].use_count, h);
+                    i, mmap_list[i].use_count, start);
 #endif
             return mmap_list + i;
         }

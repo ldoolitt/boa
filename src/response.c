@@ -1,7 +1,7 @@
 /*
  *  Boa, an http server
- *  Copyright (C) 1995 Paul Phillips <psp@well.com>
- *  Some changes Copyright (C) 1996 Larry Doolittle <ldoolitt@jlab.org>
+ *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
+ *  Some changes Copyright (C) 1996 Larry Doolittle <ldoolitt@boa.org>
  *  Some changes Copyright (C) 1996-99 Jon Nelson <jnelson@boa.org>
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -20,11 +20,12 @@
  *
  */
 
-/* $Id: response.c,v 1.34 2000/02/12 21:52:46 jon Exp $*/
+/* $Id: response.c,v 1.41 2002/03/24 22:49:04 jnelson Exp $*/
 
 #include "boa.h"
-#include <sys/uio.h>
+
 #define HTML "text/html; charset=ISO-8859-1"
+#define CRLF "\r\n"
 
 void print_content_type(request * req)
 {
@@ -40,7 +41,7 @@ void print_content_length(request * req)
     req_write(req, "\r\n");
 }
 
-inline void print_last_modified(request * req)
+void print_last_modified(request * req)
 {
     static char lm[] = "Last-Modified: "
         "                             " "\r\n";
@@ -48,7 +49,7 @@ inline void print_last_modified(request * req)
     req_write(req, lm);
 }
 
-inline void print_ka_phrase(request * req)
+void print_ka_phrase(request * req)
 {
     if (req->kacount > 0 &&
         req->keepalive == KA_ACTIVE && req->response_status < 500) {
@@ -95,7 +96,7 @@ void send_r_request_ok(request * req)
 }
 
 /* R_MOVED_PERM: 301 */
-void send_redirect_perm(request * req, char *url)
+void send_r_moved_perm(request * req, char *url)
 {
     SQUASH_KA(req);
     req->response_status = R_MOVED_PERM;
@@ -120,7 +121,7 @@ void send_redirect_perm(request * req, char *url)
 }
 
 /* R_MOVED_TEMP: 302 */
-void send_redirect_temp(request * req, char *url, char *more_hdr)
+void send_r_moved_temp(request * req, char *url, char *more_hdr)
 {
     SQUASH_KA(req);
     req->response_status = R_MOVED_TEMP;
@@ -145,9 +146,6 @@ void send_redirect_temp(request * req, char *url, char *more_hdr)
     }
     req_flush(req);
 }
-
-#define get_buffer_len(req) (req->buffer_end - req->buffer_start)
-
 
 /* R_NOT_MODIFIED: 304 */
 void send_r_not_modified(request * req)
@@ -280,6 +278,59 @@ void send_r_not_implemented(request * req)
     }
     req_flush(req);
 }
+
+/* R_BAD_GATEWAY: 502 */
+void send_r_bad_gateway(request * req)
+{
+    SQUASH_KA(req);
+    req->response_status = R_BAD_GATEWAY;
+    if (!req->simple) {
+        req_write(req, "HTTP/1.0 502 Bad Gateway" CRLF);
+        print_http_headers(req);
+        req_write(req, "Content-Type: " HTML CRLF CRLF); /* terminate header */
+    }
+    if (req->method != M_HEAD) {
+        req_write(req,
+                  "<HTML><HEAD><TITLE>502 Bad Gateway</TITLE></HEAD>\n"
+                  "<BODY><H1>502 Bad Gateway</H1>\nThe CGI was "
+                  "not CGI/1.1 compliant.\n" "</BODY></HTML>\n");
+    }
+    req_flush(req);
+}
+
+/* R_SERVICE_UNAVAILABLE: 503 */
+void send_r_service_unavailable(request * req) /* 503 */
+{
+    static char body[] =
+        "<HTML><HEAD><TITLE>503 Service Unavailable</TITLE></HEAD>\n"
+        "<BODY><H1>503 Service Unavailable</H1>\n"
+        "There are too many connections in use right now.\r\n"
+        "Please try again later.\r\n</BODY></HTML>\n";
+    static int _body_len;
+    static char *body_len;
+
+    if (!_body_len)
+        _body_len = strlen(body);
+    if (!body_len)
+        body_len = strdup(simple_itoa(_body_len));
+
+
+    SQUASH_KA(req);
+    req->response_status = R_SERVICE_UNAV;
+    if (!req->simple) {
+        req_write(req, "HTTP/1.0 503 Service Unavailable\r\n");
+        print_http_headers(req);
+        req_write(req, "Content-Length: ");
+        req_write(req, body_len);
+        req_write(req, "\r\nContent-Type: " HTML "\r\n\r\n"); /* terminate header
+                                                               */
+    }
+    if (req->method != M_HEAD) {
+        req_write(req, body);
+    }
+    req_flush(req);
+}
+
 
 /* R_NOT_IMP: 505 */
 void send_r_bad_version(request * req)

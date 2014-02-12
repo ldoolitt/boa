@@ -1,9 +1,9 @@
 /*
  *  Boa, an http server
- *  Copyright (C) 1995 Paul Phillips <psp@well.com>
- *  Some changes Copyright (C) 1996 Larry Doolittle <ldoolitt@jlab.org>
- *  Some changes Copyright (C) 1996-99 Jon Nelson <jnelson@boa.org>
+ *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
+ *  Some changes Copyright (C) 1996 Larry Doolittle <ldoolitt@boa.org>
  *  Some changes Copyright (C) 1996 Russ Nelson <nelson@crynwr.com>
+ *  Some changes Copyright (C) 1996-2002 Jon Nelson <jnelson@boa.org>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -21,13 +21,13 @@
  *
  */
 
-/* $Id: alias.c,v 1.55 2001/07/18 03:39:11 jnelson Exp $ */
+/* $Id: alias.c,v 1.70 2002/04/06 04:45:55 jnelson Exp $ */
 
 #include "boa.h"
 
 static alias *alias_hashtable[ALIAS_HASHTABLE_SIZE];
 
-inline int get_alias_hash_value(char *file);
+int get_alias_hash_value(char *file);
 
 /*
  * Name: get_alias_hash_value
@@ -37,7 +37,7 @@ inline int get_alias_hash_value(char *file);
  * Note: stops at first '/' (or '\0')
  */
 
-inline int get_alias_hash_value(char *file)
+int get_alias_hash_value(char *file)
 {
     unsigned int hash = 0;
     unsigned int index = 0;
@@ -61,6 +61,22 @@ void add_alias(char *fakename, char *realname, int type)
 {
     int hash;
     alias *old, *new;
+    int fakelen, reallen;
+
+    /* sanity checking */
+    if (fakename == NULL || realname == NULL) {
+        log_error_mesg(__FILE__, __LINE__,
+                       "NULL values sent to add_alias");
+        exit(errno);
+    }
+
+    fakelen = strlen(fakename);
+    reallen = strlen(realname);
+    if (fakelen == 0 || reallen == 0) {
+        log_error_mesg(__FILE__, __LINE__,
+                       "empty values sent to add_alias");
+        exit(1);
+    }
 
     hash = get_alias_hash_value(fakename);
 
@@ -76,7 +92,7 @@ void add_alias(char *fakename, char *realname, int type)
     if (!new) {
         log_error_mesg(__FILE__, __LINE__,
                        "out of memory adding alias to hash");
-        exit(errno);
+        exit(1);
     }
 
     if (old)
@@ -85,9 +101,15 @@ void add_alias(char *fakename, char *realname, int type)
         alias_hashtable[hash] = new;
 
     new->fakename = strdup(fakename);
-    new->fake_len = strlen(fakename);
-    new->realname = strdup(realname);
-    new->real_len = strlen(realname);
+    new->fake_len = fakelen;
+    /* check for "here" */
+    if (realname[0] == '.' && realname[1] == '/') {
+        new->realname = normalize_path(realname+2);
+        reallen = strlen(new->realname);
+    } else {
+        new->realname = strdup(realname);
+    }
+    new->real_len = reallen;
 
     new->type = type;
     new->next = NULL;
@@ -103,13 +125,15 @@ void add_alias(char *fakename, char *realname, int type)
  * alias structure or NULL if not found
  */
 
-alias *find_alias(char *uri)
+alias *find_alias(char *uri, int urilen)
 {
     alias *current;
     int hash;
 
     /* Find ScriptAlias, Alias, or Redirect */
 
+    if (urilen == 0)
+        urilen = strlen(uri);
     hash = get_alias_hash_value(uri);
 
     current = alias_hashtable[hash];
@@ -119,16 +143,30 @@ alias *find_alias(char *uri)
                 "%s:%d - comparing \"%s\" (request) to \"%s\" (alias): ",
                 __FILE__, __LINE__, uri, current->fakename);
 #endif
-        if (!memcmp(uri, current->fakename, current->fake_len)) {
+        /* current->fake_len must always be:
+         *  shorter or equal to the uri
+         */
+        /*
+         * when performing matches:
+         * If the virtual part of the url ends in '/', and
+         * we get a match, stop there.
+         * Otherwise, we require '/' or '\0' at the end of the url.
+         * We only check if the virtual path does *not* end in '/'
+         */
+        if (current->fake_len <= urilen &&
+            !memcmp(uri, current->fakename, current->fake_len) &&
+            (current->fakename[current->fake_len - 1] == '/' ||
+             (current->fakename[current->fake_len - 1] != '/' &&
+              (uri[current->fake_len] == '\0' ||
+               uri[current->fake_len] == '/')))) {
 #ifdef FASCIST_LOGGING
-            fprintf(stderr, "Got it!\n");
+                fprintf(stderr, "Got it!\n");
 #endif
-            return current;
-        } else
+                return current;
+        }
 #ifdef FASCIST_LOGGING
+        else
             fprintf(stderr, "Don't Got it!\n");
-#else
-            ;
 #endif
         current = current->next;
     }
@@ -160,36 +198,16 @@ int translate_uri(request * req)
     char *p;
     int uri_len;
 
-    /* Percent-decode request */
-    if (unescape_uri(req->request_uri, &(req->query_string)) == 0) {
-        log_error_doc(req);
-        fputs("Problem unescaping uri\n", stderr);
-        send_r_bad_request(req);
-        return 0;
-    }
-
-    /* clean pathname */
-    clean_pathname(req->request_uri);
-
     req_urip = req->request_uri;
     if (req_urip[0] != '/') {
-        send_r_not_found(req);
+        send_r_bad_request(req);
         return 0;
     }
 
     uri_len = strlen(req->request_uri);
 
-    current = find_alias(req->request_uri);
+    current = find_alias(req->request_uri, uri_len);
     if (current) {
-
-        /* FIXME: what does the below code do? */
-        /*
-           if (current->fakename[current->fake_len - 1] != '/' &&
-           req->request_uri[current->fake_len] != '/' &&
-           req->request_uri[current->fake_len] != '\0') {
-           break;
-           }
-         */
 
         if (current->type == SCRIPTALIAS) /* Script */
             return init_script_alias(req, current, uri_len);
@@ -211,15 +229,6 @@ int translate_uri(request * req)
                    req->request_uri + current->fake_len,
                    uri_len - current->fake_len + 1);
         }
-        /*
-           strcpy(buffer, current->realname);
-           strcat(buffer, &req->request_uri[current->fake_len]);
-         */
-
-        /*
-           sprintf(buffer, "%s%s", current->realname,
-           &req->request_uri[current->fake_len]);
-         */
 
         if (current->type == REDIRECT) { /* Redirect */
             if (req->method == M_POST) { /* POST to non-script */
@@ -227,7 +236,7 @@ int translate_uri(request * req)
                 send_r_bad_request(req);
                 return 0;       /* not a script alias, therefore begin filling in data */
             }
-            send_redirect_temp(req, buffer, "");
+            send_r_moved_temp(req, buffer, "");
             return 0;
         } else {                /* Alias */
             req->pathname = strdup(buffer);
@@ -245,7 +254,8 @@ int translate_uri(request * req)
 
         req_urip = req->request_uri + 2;
 
-        p = strchr(req_urip, '/');
+        /* since we have uri_len which is from strlen(req->request_uri) */
+        p = memchr(req_urip, '/', uri_len - 2);
         if (p)
             *p = '\0';
 
@@ -275,11 +285,6 @@ int translate_uri(request * req)
             if (p)
                 memcpy(buffer + l1 + 1 + l2, p, l3 + 1);
         }
-        /*
-           sprintf(buffer, "%s/%s", user_homedir, user_dir);
-           if (p)
-           strcat(buffer, p);
-         */
     } else if (document_root) {
         /* no aliasing, no userdir... */
         int l1, l2, l3;
@@ -376,12 +381,11 @@ int init_script_alias(request * req, alias * current1, int uri_len)
         send_r_bad_request(req);
         return 0;
     }
-    strcpy(pathname, current1->realname);
-    strcat(pathname, &req->request_uri[current1->fake_len]);
-    /*
-       sprintf(pathname, "%s%s", current1->realname,
-       &req->request_uri[current1->fake_len]);
-     */
+
+    memcpy(pathname, current1->realname, current1->real_len);
+    memcpy(pathname + current1->real_len,
+           &req->request_uri[current1->fake_len],
+           uri_len - current1->fake_len + 1); /* the +1 copies the NUL */
 #ifdef FASCIST_LOGGING
     log_error_time();
     fprintf(stderr,
@@ -478,12 +482,9 @@ int init_script_alias(request * req, alias * current1, int uri_len)
                     return 0;
                 }
 
-                strcpy(buffer, current->realname);
-                strcat(buffer, &req->path_info[current->fake_len]);
-                /*
-                   sprintf(buffer, "%s%s", current->realname,
-                   &req->path_info[current->fake_len]);
-                 */
+                memcpy(buffer, current->realname, current->real_len);
+                strcpy(buffer + current->real_len,
+                       &req->path_info[current->fake_len]);
                 req->path_translated = strdup(buffer);
             }
             current = current->next;
@@ -525,16 +526,9 @@ int init_script_alias(request * req, alias * current1, int uri_len)
                 memcpy(req->path_translated + l1 + 1, user_dir, l2 + 1);
                 if (p)
                     memcpy(req->path_translated + l1 + 1 + l2, p, l3 + 1);
-
-                /*
-                   sprintf(buffer, "%s/%s", user_homedir, user_dir);
-                   if (p)
-                   strcat(buffer, p);
-                   req->path_translated = strdup(buffer);
-                 */
             }
         }
-        if (!req->path_translated) {
+        if (!req->path_translated && document_root) {
             /* no userdir, no aliasing... try document root */
             int l1, l2;
             l1 = strlen(document_root);
@@ -548,26 +542,12 @@ int init_script_alias(request * req, alias * current1, int uri_len)
             }
             memcpy(req->path_translated, document_root, l1);
             memcpy(req->path_translated + l1, req->path_info, l2 + 1);
-            /*
-               sprintf(buffer, "%s%s", document_root,
-               req->path_info);
-               req->path_translated = strdup(buffer);
-             */
         }
     }
 
     req->pathname = strdup(pathname);
+    req->script_name = strdup(req->request_uri);
 
-    /* there used to be some ip stuff in here */
-
-    /* We have to strip some stuff from the pathname because we
-       want an http accessible name, not the "real" name.
-       Thus, instead of /usr/lib/cgi-bin/cgiprogram, we get
-       /cgi-bin/cgiprogram
-       Yay!
-     */
-    req->script_name = strdup(req->pathname + current1->real_len
-                              - current1->fake_len);
     return 1;
 }
 

@@ -1,6 +1,6 @@
 /*
  *  Boa, an http server
- *  Copyright (C) 1995 Paul Phillips <psp@well.com>
+ *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
  *  Some changes Copyright (C) 1999 Jon Nelson <jnelson@boa.org>
 
  *  This program is free software; you can redistribute it and/or modify
@@ -19,7 +19,7 @@
  *
  */
 
-/* $Id: buffer.c,v 1.9 2001/10/20 02:56:36 jnelson Exp $ */
+/* $Id: buffer.c,v 1.10 2002/01/21 02:19:16 jnelson Exp $ */
 
 #include "boa.h"
 #include "escape.h"

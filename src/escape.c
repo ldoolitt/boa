@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: escape.c,v 1.5 2001/11/05 00:43:12 jnelson Exp $ */
+/* $Id: escape.c,v 1.7 2002/03/22 04:24:09 jnelson Exp $ */
 
 /*
  unreserved = alnum | mark
@@ -48,7 +48,10 @@ void build_needs_escape(void)
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         "abcdefghijklmnopqrstuvwxyz"
         "0123456789"
-        "-_.!~*'():@&=+$,/";
+        "-_.!~*'():@&=+$,/?";
+    /* 21 Mar 2002 - jnelson - confirm with Apache 1.3.23 that '?'
+     * is safe to leave unescaped.
+     */
     unsigned short i, j;
 
     b = 1;

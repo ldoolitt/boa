@@ -1,7 +1,7 @@
 /*
  *  Boa, an http server
- *  Copyright (C) 1995 Paul Phillips <psp@well.com>
- *  Some changes Copyright (C) 1996,97 Larry Doolittle <ldoolitt@jlab.org>
+ *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
+ *  Some changes Copyright (C) 1996,97 Larry Doolittle <ldoolitt@boa.org>
  *  Some changes Copyright (C) 1997,99 Jon Nelson <jnelson@boa.org>
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: read.c,v 1.44 2001/10/20 02:58:39 jnelson Exp $*/
+/* $Id: read.c,v 1.49 2002/03/18 01:53:48 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -106,9 +106,11 @@ int read_header(request * req)
 
             /* terminate string that begins at req->header_line */
 
-            if (req->logline)
-                process_option_line(req);
-            else {
+            if (req->logline) {
+                if (process_option_line(req) == 0) {
+                    return 0;
+                }
+            } else {
                 if (process_logline(req) == 0)
                     return 0;
                 if (req->simple)
@@ -153,23 +155,34 @@ int read_header(request * req)
                  */
 
                 if (req->content_length) {
-                    req->filesize = atoi(req->content_length);
-                    req->filepos = 0;
-                    if (single_post_limit && req->filesize > single_post_limit) {
+                    int content_length;
+
+                    content_length = boa_atoi(req->content_length);
+                    /* Is a content-length of 0 legal? */
+                    if (content_length <= 0) {
                         log_error_time();
-                        fprintf(stderr, "Content-Length [%ld] > SinglePostLimit [%d] on POST!\n",
-                               req->filesize, single_post_limit);
+                        fprintf(stderr, "Invalid Content-Length [%s] on POST!\n",
+                                req->content_length);
                         send_r_bad_request(req);
                         return 0;
+                    }
+                    if (single_post_limit && content_length > single_post_limit) {
+                        log_error_time();
+                        fprintf(stderr, "Content-Length [%d] > SinglePostLimit [%d] on POST!\n",
+                                content_length, single_post_limit);
+                        send_r_bad_request(req);
+                        return 0;
+                    }
+                    req->filesize = content_length;
+                    req->filepos = 0;
+                    if (req->header_end - req->header_line > req->filesize) {
+                        req->header_end = req->header_line + req->filesize;
                     }
                 } else {
                     log_error_time();
                     fprintf(stderr, "Unknown Content-Length POST!\n");
                     send_r_bad_request(req);
                     return 0;
-                }
-                if (req->header_end - req->header_line > req->filesize) {
-                    req->header_end = req->header_line + req->filesize;
                 }
             }                   /* either process_header_end failed or req->method != POST */
             return retval;      /* 0 - close it done, 1 - keep on ready */
@@ -206,8 +219,9 @@ int read_header(request * req)
 
                req->status = DEAD;
                return 0;
-             */
-            boa_perror(req, "header read");
+               */
+            log_error_doc(req);
+            perror("header read");            /* don't need to save errno because log_error_doc does */
             return 0;
         } else if (bytes == 0) {
             /*

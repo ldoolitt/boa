@@ -18,19 +18,12 @@
  *
  */
 
-/* $Id: config.c,v 1.24 2001/05/23 00:57:23 jnelson Exp $*/
+/* $Id: config.c,v 1.31 2002/03/18 01:55:06 jnelson Exp $*/
 
-#include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <pwd.h>
-#include <grp.h>
+#include "boa.h"
 #include "y.tab.h"
 #include "parse.h"
-#include "boa.h"
 
-extern FILE *yyin;
 int yyparse(void);              /* Better match the output of lex */
 
 #ifdef DEBUG
@@ -39,15 +32,14 @@ int yyparse(void);              /* Better match the output of lex */
 #define DBG(x)
 #endif
 
-char *chroot_path;
 int server_port;
 uid_t server_uid;
 gid_t server_gid;
 char *server_root;
 char *server_name;
 char *server_admin;
-char *server_ip = NULL;
-int virtualhost = 0;
+char *server_ip;
+int virtualhost;
 
 char *document_root;
 char *user_dir;
@@ -55,11 +47,11 @@ char *directory_index;
 char *default_type;
 char *dirmaker;
 char *cachedir;
-char *pidfile;
 
 char *tempdir;
 
-int single_post_limit;
+char *cgi_path = NULL;
+int single_post_limit = SINGLE_POST_LIMIT_DEFAULT;
 
 int ka_timeout;
 int ka_max;
@@ -69,26 +61,23 @@ char *error_log_name;
 char *access_log_name;
 char *cgi_log_name;
 
-int use_localtime = 0;
-
-/* These come from boa_grammar.y */
-void add_alias(char *fakename, char *realname, int script);
-void add_mime_type(char *extension, char *type);
+int use_localtime;
 
 /* These are new */
-void c_set_user(char *v1, char *v2, void *t);
-void c_set_group(char *v1, char *v2, void *t);
-void c_set_string(char *v1, char *v2, void *t);
-void c_set_int(char *v1, char *v2, void *t);
-void c_set_unity(char *v1, char *v2, void *t);
-void c_add_type(char *v1, char *v2, void *t);
-void c_add_alias(char *v1, char *v2, void *t);
+static void c_set_user(char *v1, char *v2, void *t);
+static void c_set_group(char *v1, char *v2, void *t);
+static void c_set_string(char *v1, char *v2, void *t);
+static void c_set_int(char *v1, char *v2, void *t);
+static void c_set_unity(char *v1, char *v2, void *t);
+static void c_add_type(char *v1, char *v2, void *t);
+static void c_add_alias(char *v1, char *v2, void *t);
 
 /* Fakery to keep the value passed to action() a void *,
    see usage in table and c_add_alias() below */
-int script_number = SCRIPTALIAS;
-int redirect_number = REDIRECT;
-int alias_number = ALIAS;
+static int script_number = SCRIPTALIAS;
+static int redirect_number = REDIRECT;
+static int alias_number = ALIAS;
+static uid_t current_uid=0;
 
 /* Help keep the table below compact */
 #define S0A STMT_NO_ARGS
@@ -96,9 +85,7 @@ int alias_number = ALIAS;
 #define S2A STMT_TWO_ARGS
 
 struct ccommand clist[] = {
-    {"ChrootPath", S1A, c_set_string, &chroot_path},
     {"Port", S1A, c_set_int, &server_port},
-    {"PidFile", S1A, c_set_string, &pidfile},
     {"Listen", S1A, c_set_string, &server_ip},
     {"BackLog", S1A, c_set_int, &backlog},
     {"User", S1A, c_set_user, NULL},
@@ -125,14 +112,16 @@ struct ccommand clist[] = {
     {"ScriptAlias", S2A, c_add_alias, &script_number},
     {"Redirect", S2A, c_add_alias, &redirect_number},
     {"Alias", S2A, c_add_alias, &alias_number},
-    {"SinglePostLimit", S1A, c_set_int, &single_post_limit}
+    {"SinglePostLimit", S1A, c_set_int, &single_post_limit},
+    {"CGIPath", S1A, c_set_string, &cgi_path},
 };
 
-void c_set_user(char *v1, char *v2, void *t)
+static void c_set_user(char *v1, char *v2, void *t)
 {
     struct passwd *passwdbuf;
     char *endptr;
     int i;
+
     DBG(printf("User %s = ", v1);
         )
         i = strtol(v1, &endptr, 0);
@@ -142,6 +131,8 @@ void c_set_user(char *v1, char *v2, void *t)
         passwdbuf = getpwnam(v1);
         if (!passwdbuf) {
             fprintf(stderr, "No such user: %s\n", v1);
+            if (current_uid)
+                return;
             exit(1);
         }
         server_uid = passwdbuf->pw_uid;
@@ -150,7 +141,7 @@ void c_set_user(char *v1, char *v2, void *t)
         )
 }
 
-void c_set_group(char *v1, char *v2, void *t)
+static void c_set_group(char *v1, char *v2, void *t)
 {
     struct group *groupbuf;
     char *endptr;
@@ -164,6 +155,8 @@ void c_set_group(char *v1, char *v2, void *t)
         groupbuf = getgrnam(v1);
         if (!groupbuf) {
             fprintf(stderr, "No such group: %s\n", v1);
+            if (current_uid)
+                return;
             exit(1);
         }
         server_gid = groupbuf->gr_gid;
@@ -172,7 +165,7 @@ void c_set_group(char *v1, char *v2, void *t)
         )
 }
 
-void c_set_string(char *v1, char *v2, void *t)
+static void c_set_string(char *v1, char *v2, void *t)
 {
     char *s;
     DBG(printf("Setting pointer %p to string %s ..", t, v1);
@@ -190,7 +183,7 @@ void c_set_string(char *v1, char *v2, void *t)
     }
 }
 
-void c_set_int(char *v1, char *v2, void *t)
+static void c_set_int(char *v1, char *v2, void *t)
 {
     char *endptr;
     int i;
@@ -213,7 +206,7 @@ void c_set_int(char *v1, char *v2, void *t)
     }
 }
 
-void c_set_unity(char *v1, char *v2, void *t)
+static void c_set_unity(char *v1, char *v2, void *t)
 {
     DBG(printf("Setting pointer %p to unity\n", t);
         )
@@ -221,12 +214,12 @@ void c_set_unity(char *v1, char *v2, void *t)
         *(int *) t = 1;
 }
 
-void c_add_type(char *v1, char *v2, void *t)
+static void c_add_type(char *v1, char *v2, void *t)
 {
     add_mime_type(v1, v2);
 }
 
-void c_add_alias(char *v1, char *v2, void *t)
+static void c_add_alias(char *v1, char *v2, void *t)
 {
     add_alias(v2, v1, *(int *) t);
 }
@@ -252,6 +245,8 @@ struct ccommand *lookup_keyword(char *c)
  */
 void read_config_files(void)
 {
+    char *temp;
+    current_uid = getuid();
     yyin = fopen("boa.conf", "r");
 
     if (!yyin) {
@@ -287,8 +282,48 @@ void read_config_files(void)
     tempdir = getenv("TMP");
     if (tempdir == NULL)
         tempdir = "/tmp";
-    if (single_post_limit)
-	    single_post_limit *= 1024;
-    if (single_post_limit < 0)
-	    single_post_limit = 0;
+
+    if (single_post_limit < 0) {
+        fprintf(stderr, "Invalid value for single_post_limit: %d\n",
+                single_post_limit);
+        exit(1);
+    }
+
+    if (document_root) {
+        temp = normalize_path(document_root);
+        free(document_root);
+        document_root = temp;
+    }
+
+    if (error_log_name) {
+        temp = normalize_path(error_log_name);
+        free(error_log_name);
+        error_log_name = temp;
+    }
+
+    if (access_log_name) {
+        temp = normalize_path(access_log_name);
+        free(access_log_name);
+        access_log_name = temp;
+    }
+
+    if (cgi_log_name) {
+        temp = normalize_path(cgi_log_name);
+        free(cgi_log_name);
+        cgi_log_name = temp;
+    }
+
+    if (dirmaker) {
+        temp = normalize_path(dirmaker);
+        free(dirmaker);
+        dirmaker = temp;
+    }
+
+#if 0
+    if (mime_types) {
+        temp = normalize_path(mime_types);
+        free(mime_types);
+        mime_types = temp;
+    }
+#endif
 }

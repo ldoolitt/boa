@@ -1,6 +1,8 @@
 /*
  *  Boa, an http server
- *  Copyright (C) 1995 Paul Phillips <psp@well.com>
+ *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
+ *  Some changes Copyright (C) 1999-2000 Jon Nelson <jnelson@boa.org>
+ *   and Larry Doolittle <ldoolitt@boa.org>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -18,24 +20,19 @@
  *
  */
 
-/* $Id: compat.h,v 1.11 2001/10/20 02:52:42 jnelson Exp $*/
+/* $Id: compat.h,v 1.18 2002/03/24 22:29:29 jnelson Exp $*/
 
 #ifndef _COMPAT_H
 #define _COMPAT_H
 
 #include "config.h"
 
-
-#ifndef HAVE_STRSTR
-char *strstr(char *s1, char *s2);
-#endif
-#ifndef HAVE_STRDUP
-char *strdup(char *s);
-#endif
-
 #ifdef TIME_WITH_SYS_TIME
-/* maybe-defined in config.h */
 #include <sys/time.h>
+#endif
+
+#ifdef HAVE_SYS_FCNTL_H
+#include <sys/fcntl.h>
 #endif
 
 #ifndef OPEN_MAX
@@ -46,6 +43,7 @@ char *strdup(char *s);
 #define NI_MAXHOST 20
 #endif
 
+#include <sys/socket.h>
 #ifndef SO_MAXCONN
 #define SO_MAXCONN 250
 #endif
@@ -54,12 +52,16 @@ char *strdup(char *s);
 #define PATH_MAX 2048
 #endif
 
-
-#ifdef SUNOS
-#define NOBLOCK O_NDELAY
-#else
-#define NOBLOCK O_NONBLOCK
-#endif
+/* Wild guess time, probably better done with configure */
+#ifdef O_NONBLOCK
+#define NOBLOCK O_NONBLOCK  /* Linux */
+#else /* O_NONBLOCK */
+#ifdef O_NDELAY
+#define NOBLOCK O_NDELAY    /* Sun */
+#else  /* O_NDELAY */
+#error "Can't find a way to #define NOBLOCK"
+#endif /* O_NDELAY */
+#endif /* O_NONBLOCK */
 
 #ifndef MAP_FILE
 #define MAP_OPTIONS MAP_PRIVATE /* Sun */
@@ -92,6 +94,43 @@ char *strdup(char *s);
 # if HAVE_NDIR_H
 #  include <ndir.h>
 # endif
+#endif
+
+/* below here, functions are provided in extras */
+#ifndef HAVE_SCANDIR
+int
+scandir(const char *dir, struct dirent ***namelist,
+        int (*select) (const struct dirent *),
+        int (*compar) (const struct dirent **, const struct dirent **));
+#endif
+
+#ifndef HAVE_ALPHASORT
+int alphasort(const struct dirent **a, const struct dirent **b);
+#endif
+
+#ifndef HAVE_STRSTR
+char *strstr(char *s1, char *s2);
+#endif
+
+#ifndef HAVE_STRDUP
+char *strdup(char *s);
+#endif
+
+#ifdef HAVE_TM_GMTOFF
+#define TIMEZONE_OFFSET(foo) foo##->tm_gmtoff
+#else
+#define TIMEZONE_OFFSET(foo) timezone
+#endif
+
+#ifdef HAVE_TM_ZONE
+#define TIMEZONE(foo) foo##->tm_zone
+#else
+#define TIMEZONE(foo) *tzname
+#endif
+
+#ifdef HAVE_LIBDMALLOC
+#define DMALLOC_FUNC_CHECK
+#include <dmalloc.h>
 #endif
 
 #endif
