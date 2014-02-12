@@ -20,9 +20,13 @@
  *
  */
 
-/* $Id: hash.c,v 1.14.4.10 2003/01/14 05:27:49 jnelson Exp $*/
+/* $Id: hash.c,v 1.14.4.11 2003/02/21 23:44:30 jnelson Exp $*/
 
 #include "boa.h"
+
+#ifndef MAX_HASH_LENGTH
+#define MAX_HASH_LENGTH 4
+#endif
 
 #define DEBUG if
 #define DEBUG_HASH 0
@@ -56,21 +60,32 @@ static unsigned get_homedir_hash_value(const char *name);
 
 #ifdef WANT_ICKY_HASH
 static unsigned four_char_hash(const char *buf);
-#define boa_hash four_char_hash
+#define _boa_hash four_char_hash
 #else
 #ifdef WANT_SDBM_HASH
 static unsigned sdbm_hash(const char *str);
-#define boa_hash sdbm_hash
+#define _boa_hash sdbm_hash
 #else
 #ifdef WANT_DJB2_HASH
 static unsigned djb2_hash(const char *str);
-#define boa_hash djb2_hash
+#define _boa_hash djb2_hash
 #else
 static unsigned fnv1a_hash(const char *str);
-#define boa_hash fnv1a_hash
+#define _boa_hash fnv1a_hash
 #endif
 #endif
 #endif
+
+static unsigned boa_hash(const char *str)
+{
+    if (str == NULL || str[0] == '\0') {
+        log_error_time();
+        fprintf(stderr,
+                "Attempt to hash NULL or empty string! [boa_hash]!\n");
+        return 0;
+    }
+    return _boa_hash(str);
+}
 
 #ifdef WANT_ICKY_HASH
 static unsigned four_char_hash(const char *buf)
@@ -94,7 +109,6 @@ static unsigned four_char_hash(const char *buf)
  */
 
 #else
-#define MAX_HASH_LENGTH 4
 #ifdef WANT_SDBM_HASH
 static unsigned sdbm_hash(const char *str)
 {
@@ -182,16 +196,33 @@ hash_struct *hash_insert(hash_struct * table[], const unsigned int hash,
 
     if (!key) {
         log_error_time();
-        fprintf(stderr, "Yipes! Null value sent as key to hash_insert!\n");
+        fprintf(stderr, "Yipes! Null value sent as key! [hash_insert]!\n");
+        return NULL;
+    } else if (key[0] == '\0') {
+        log_error_time();
+        fprintf(stderr,
+                "Attempt to hash NULL or empty key! [hash_insert]!\n");
+        return NULL;
+    }
+
+    if (!value) {
+        log_error_time();
+        fprintf(stderr, "Yipes! Null value sent as value! [hash_insert]!\n");
+        return NULL;
+    } else if (value[0] == '\0') {
+        log_error_time();
+        fprintf(stderr,
+                "Attempt to hash NULL or empty value! [hash_insert]!\n");
         return NULL;
     }
 
     /* should we bother to check table, hash, and key for NULL/0 ? */
 
-    DEBUG(DEBUG_HASH)
+    DEBUG(DEBUG_HASH) {
         fprintf(stderr,
                 "Adding key \"%s\" for value \"%s\" (hash=%d)\n",
                 key, value, hash);
+    }
 
     current = table[hash];
     while (current) {
@@ -239,12 +270,23 @@ hash_struct *hash_insert(hash_struct * table[], const unsigned int hash,
 }
 
 static
-hash_struct *find_in_hash(hash_struct * table[], const char *key,
+hash_struct *hash_find(hash_struct * table[], const char *key,
                           const unsigned int hash)
 {
     hash_struct *current;
 
     current = table[hash];
+
+    if (!key) {
+        log_error_time();
+        fprintf(stderr, "Yipes! Null value sent as key! [hash_find]!\n");
+        return NULL;
+    } else if (key[0] == '\0') {
+        log_error_time();
+        fprintf(stderr,
+                "Attempt to locate empty string in hash! [hash_find]!\n");
+        return NULL;
+    }
 
     while (current) {
         if (!strcmp(current->key, key)) /* hit */
@@ -255,139 +297,8 @@ hash_struct *find_in_hash(hash_struct * table[], const char *key,
     return NULL;
 }
 
-/*
- * Name: add_mime_type
- * Description: Adds a key/value pair to the mime_hashtable
- */
-
-void add_mime_type(const char *extension, const char *type)
-{
-    unsigned int hash;
-
-    if (!extension || extension[0] == '\0') {
-        log_error_time();
-        fprintf(stderr,
-                "Yipes! Null value sent as key to add_mime_type!\n");
-        return;
-    }
-
-    hash = get_mime_hash_value(extension);
-    hash_insert(mime_hashtable, hash, extension, type);
-}
-
-/*
- * Name: get_mime_hash_value
- *
- * Description: adds the ASCII values of the file extension letters
- * and mods by the hashtable size to get the hash value
- */
-
-unsigned get_mime_hash_value(const char *extension)
-{
-    if (extension == NULL || extension[0] == '\0') {
-        /* FIXME */
-        log_error_time();
-        fprintf(stderr,
-                "Attempt to hash NULL or empty string! [get_mime_hash_value]!\n");
-        return 0;
-    }
-
-    return boa_hash(extension) % MIME_HASHTABLE_SIZE;
-}
-
-/*
- * Name: get_mime_type
- *
- * Description: Returns the mime type for a supplied filename.
- * Returns default type if not found.
- */
-
-char *get_mime_type(const char *filename)
-{
-    char *extension;
-    hash_struct *current;
-
-    unsigned int hash;
-
-    extension = strrchr(filename, '.');
-
-    /* remember, extension points to the *last* '.' in the filename,
-     * which may be NULL or look like:
-     *  foo.bar
-     *  foo. (in which case extension[1] == '\0')
-     */
-    if (!extension || extension[1] == '\0')
-        return default_type;
-
-    /* make sure we hash on the 'bar' not the '.bar' */
-    ++extension;
-
-    hash = get_mime_hash_value(extension);
-    current = find_in_hash(mime_hashtable, extension, hash);
-    return (current ? current->value : default_type);
-}
-
-/*
- * Name: get_homedir_hash_value
- *
- * Description: adds the ASCII values of the username letters
- * and mods by the hashtable size to get the hash value
- */
-
-static unsigned get_homedir_hash_value(const char *name)
-{
-    unsigned int hash = 0;
-
-    if (name == NULL || name[0] == '\0') {
-        /* FIXME */
-        log_error_time();
-        fprintf(stderr,
-                "Attempt to hash NULL or empty string! [get_homedir_hash_value]\n");
-        return 0;
-    }
-
-    hash = boa_hash(name) % PASSWD_HASHTABLE_SIZE;
-
-    return hash;
-}
-
-
-/*
- * Name: get_home_dir
- *
- * Description: Returns a point to the supplied user's home directory.
- * Adds to the hashtable if it's not already present.
- *
- */
-
-char *get_home_dir(const char *name)
-{
-    hash_struct *current;
-
-    unsigned int hash;
-
-    hash = get_homedir_hash_value(name);
-
-    current = find_in_hash(passwd_hashtable, name, hash);
-
-    if (!current) {
-        /* not found */
-        struct passwd *passwdbuf;
-
-        passwdbuf = getpwnam(name);
-
-        if (!passwdbuf)         /* does not exist */
-            return NULL;
-
-        current =
-            hash_insert(passwd_hashtable, hash, name, passwdbuf->pw_dir);
-    }
-
-    return (current ? current->value : NULL);
-}
-
 static
-void clear_hashtable(hash_struct * table[], int size)
+void hash_clear(hash_struct * table[], int size)
 {
     int i;
     hash_struct *temp;
@@ -407,17 +318,7 @@ void clear_hashtable(hash_struct * table[], int size)
     }
 }
 
-void dump_mime(void)
-{
-    clear_hashtable(mime_hashtable, MIME_HASHTABLE_SIZE);
-}
-
-void dump_passwd(void)
-{
-    clear_hashtable(passwd_hashtable, PASSWD_HASHTABLE_SIZE);
-}
-
-void show_hash_stats(void)
+void hash_show_stats(void)
 {
     int i;
     hash_struct *temp;
@@ -464,4 +365,138 @@ void show_hash_stats(void)
     log_error_time();
     fprintf(stderr, "passwd_hashtable has %d total entries\n", total);
 
+}
+
+
+/*******************************************************************/
+/*******************************************************************/
+/******* Generic Hash Functions Above, Specfic Below ***************/
+/*******************************************************************/
+/*******************************************************************/
+
+/*
+ * Name: add_mime_type
+ * Description: Adds a key/value pair to the mime_hashtable
+ */
+
+void add_mime_type(const char *extension, const char *type)
+{
+    unsigned int hash;
+
+    hash = get_mime_hash_value(extension);
+    hash_insert(mime_hashtable, hash, extension, type);
+}
+
+/*
+ * Name: get_mime_hash_value
+ *
+ * Description: adds the ASCII values of the file extension letters
+ * and mods by the hashtable size to get the hash value
+ */
+
+unsigned get_mime_hash_value(const char *extension)
+{
+    return boa_hash(extension) % MIME_HASHTABLE_SIZE;
+}
+
+/*
+ * Name: get_mime_type
+ *
+ * Description: Returns the mime type for a supplied filename.
+ * Returns default type if not found.
+ */
+
+char *get_mime_type(const char *filename)
+{
+    char *extension;
+    hash_struct *current;
+
+    unsigned int hash;
+
+    if (filename == NULL) {
+        log_error_time();
+        fprintf(stderr,
+                "Attempt to hash NULL string! [get_mime_type]\n");
+        return default_type;
+    } else if (filename[0] == '\0') {
+        log_error_time();
+        fprintf(stderr,
+                "Attempt to hash empty string! [get_mime_type]\n");
+        return default_type;
+    }
+
+    extension = strrchr(filename, '.');
+
+    /* remember, extension points to the *last* '.' in the filename,
+     * which may be NULL or look like:
+     *  foo.bar
+     *  foo. (in which case extension[1] == '\0')
+     */
+    /* extension[0] *can't* be NIL */
+    if (!extension || extension[1] == '\0')
+        return default_type;
+
+    /* make sure we hash on the 'bar' not the '.bar' */
+    ++extension;
+
+    hash = get_mime_hash_value(extension);
+    current = hash_find(mime_hashtable, extension, hash);
+    return (current ? current->value : default_type);
+}
+
+/*
+ * Name: get_homedir_hash_value
+ *
+ * Description: adds the ASCII values of the username letters
+ * and mods by the hashtable size to get the hash value
+ */
+
+static unsigned get_homedir_hash_value(const char *name)
+{
+    return boa_hash(name) % PASSWD_HASHTABLE_SIZE;
+}
+
+
+/*
+ * Name: get_home_dir
+ *
+ * Description: Returns a point to the supplied user's home directory.
+ * Adds to the hashtable if it's not already present.
+ *
+ */
+
+char *get_home_dir(const char *name)
+{
+    hash_struct *current;
+
+    unsigned int hash;
+
+    hash = get_homedir_hash_value(name);
+
+    current = hash_find(passwd_hashtable, name, hash);
+
+    if (!current) {
+        /* not found */
+        struct passwd *passwdbuf;
+
+        passwdbuf = getpwnam(name);
+
+        if (!passwdbuf)         /* does not exist */
+            return NULL;
+
+        current =
+            hash_insert(passwd_hashtable, hash, name, passwdbuf->pw_dir);
+    }
+
+    return (current ? current->value : NULL);
+}
+
+void dump_mime(void)
+{
+    hash_clear(mime_hashtable, MIME_HASHTABLE_SIZE);
+}
+
+void dump_passwd(void)
+{
+    hash_clear(passwd_hashtable, PASSWD_HASHTABLE_SIZE);
 }

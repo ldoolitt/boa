@@ -18,7 +18,7 @@
  *
  */
 
-/* $Id: config.c,v 1.31.2.20 2003/02/02 05:02:19 jnelson Exp $*/
+/* $Id: config.c,v 1.31.2.21 2003/02/19 03:06:48 jnelson Exp $*/
 
 #include "boa.h"
 #include "access.h"
@@ -554,4 +554,6 @@ void read_config_files(void)
         }
         max_connections = rl.rlim_cur;
     }
+    if (max_connections > FD_SETSIZE - 20)
+        max_connections = FD_SETSIZE - 20;
 }

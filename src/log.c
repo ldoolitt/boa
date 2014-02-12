@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: log.c,v 1.36.2.19 2003/02/02 05:02:19 jnelson Exp $*/
+/* $Id: log.c,v 1.36.2.20 2003/02/19 00:45:38 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -170,11 +170,6 @@ void log_access(request * req)
  * Description: Logs the current time and transaction identification
  * to the stderr (the error log):
  * should always be followed by an fprintf to stderr
- *
- * This function used to be implemented with a big fprintf, but not
- * all fprintf's are reliable in the face of null string pointers
- * (SunOS, in particular).  As long as I had to add the checks for
- * null pointers, I changed from fprintf to fputs.
  *
  * Example output:
  [08/Nov/1997:01:05:03 -0600] request from 192.228.331.232 "GET /~joeblow/dir/ HTTP/1.0" ("/usr/user1/joeblow/public_html/dir/"): write: Broken pipe

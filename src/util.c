@@ -3,7 +3,7 @@
  *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
  *  Some changes Copyright (C) 1996,97 Larry Doolittle <ldoolitt@boa.org>
  *  Some changes Copyright (C) 1996 Charles F. Randall <crandall@goldsys.com>
- *  Some changes Copyright (C) 1996-99 Jon Nelson <jnelson@boa.org>
+ *  Some changes Copyright (C) 1996-99,2003 Jon Nelson <jnelson@boa.org>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: util.c,v 1.61.2.9 2003/02/02 05:02:19 jnelson Exp $ */
+/* $Id: util.c,v 1.61.2.11 2003/02/19 03:05:28 jnelson Exp $ */
 
 #include "boa.h"
 
@@ -229,13 +229,18 @@ int modified_since(time_t * mtime, const char *if_modified_since)
                     &day, monthname, &year, &hour, &minute, &second) == 6);
     else {
         log_error_time();
-        fprintf(stderr, "Error in %s, line %d: Unable to sscanf \"%s\"\n",
-                __FILE__, __LINE__, ims_info);
+        fprintf(stderr, "Error scanning \"%s\" in modified_since\n", ims_info);
         return -1;              /* error */
     }
 
     file_gmt = gmtime(mtime);
     month = month2int(monthname);
+
+    if (month == -1) {
+        log_error_time();
+        fprintf(stderr, "Invalid month name: \"%s\"\n", monthname);
+        return -1;
+    }
 
     /* Go through from years to seconds -- if they are ever unequal,
        we know which one is newer and can return */
@@ -273,7 +278,6 @@ char *to_upper(char *str)
             *str = '_';
         else
             *str = toupper(*str);
-
         str++;
     }
 
@@ -301,10 +305,18 @@ int unescape_uri(char *uri, char **query_string)
     while ((c = *uri_old)) {
         if (c == '%') {
             uri_old++;
-            if ((c = *uri_old++) && (d = *uri_old++))
-                *uri++ = HEX_TO_DECIMAL(c, d);
-            else
-                return 0;       /* NULL in chars to be decoded */
+            if ((c = *uri_old++) && (d = *uri_old++)) {
+                *uri = HEX_TO_DECIMAL(c, d);
+                if (*uri < 32 || *uri > 126) {
+                    /* control chars in URI */
+                    *uri = '\0';
+                    return 0;
+                }
+            } else {
+                *uri = '\0';
+                return 0;
+            }
+            ++uri;
         } else if (c == '?') {  /* query string */
             if (query_string)
                 *query_string = ++uri_old;

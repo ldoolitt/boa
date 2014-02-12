@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: get.c,v 1.76.2.25 2003/01/20 18:01:15 jnelson Exp $*/
+/* $Id: get.c,v 1.76.2.26 2003/02/19 04:10:16 jnelson Exp $*/
 
 #include "boa.h"
 #include "access.h"
@@ -64,6 +64,13 @@ int init_get(request * req)
 
         len = strlen(req->pathname);
 
+        if (len + 4 > sizeof(gzip_pathname)) {
+            log_error_doc(req);
+            fprintf(stderr, "Pathname + .gz too long! (%s)\n", req->pathname);
+            send_r_bad_request(req);
+            return 0;
+        }
+
         memcpy(gzip_pathname, req->pathname, len);
         memcpy(gzip_pathname + len, ".gz", 3);
         gzip_pathname[len + 3] = '\0';
@@ -76,7 +83,7 @@ int init_get(request * req)
                 free(req->pathname);
             req->pathname = strdup(gzip_pathname);
             if (!req->pathname) {
-                log_error_time();
+                log_error_doc(req);
                 perror("strdup");
                 send_r_error(req);
                 return 0;
@@ -203,11 +210,21 @@ int init_get(request * req)
 
         if (data_fd == -1)      /* couldn't do it */
             return 0;           /* errors reported by get_dir */
-        else if (data_fd <= 1)
-            /* data_fd == 0 -> close it down, 1 -> continue */
+        else if (data_fd == 0 || data_fd == 1)
             return data_fd;
+        else if (data_fd < 0)
+            return 0;
         /* else, data_fd contains the fd of the file... */
     }
+
+    if (!S_ISREG(statbuf.st_mode)) { /* regular file */
+        log_error_doc(req);
+        fprintf(stderr, "Resulting file is not a regular file.\n");
+        send_r_bad_request(req);
+        close(data_fd);
+        return 0;
+    }
+
     if (req->if_modified_since &&
         !modified_since(&(statbuf.st_mtime), req->if_modified_since)) {
         send_r_not_modified(req);
@@ -228,7 +245,7 @@ int init_get(request * req)
     /* parse ranges now */
     /* we have to wait until req->filesize exists to fix them up */
     /* fixup handles handles communicating with the client */
-    if (req->ranges && !fixup_ranges(req)) {
+    if (req->ranges && !ranges_fixup(req)) {
         close(data_fd);
         return 0;
     }
@@ -303,7 +320,7 @@ int init_get(request * req)
             send_r_partial_content(req);
         } else {
             /* either no if-range or the if-range does not match */
-            reset_ranges(req);
+            ranges_reset(req);
             req->ranges = range_pool_pop();
             req->ranges->start = 0;
             req->ranges->stop = req->filesize - 1;
@@ -473,7 +490,7 @@ int get_dir(request * req, struct stat *statbuf)
         l1 = strlen(req->pathname);
         l2 = strlen(directory_index);
 #ifdef GUNZIP
-        if (l1 + l2 + 1 + 3 > sizeof(pathname_with_index)) { /* for .gz */
+        if (l1 + l2 + 3 + 1 > sizeof(pathname_with_index)) { /* for .gz */
 #else
         if (l1 + l2 + 1 > sizeof(pathname_with_index)) {
 #endif
@@ -488,12 +505,10 @@ int get_dir(request * req, struct stat *statbuf)
         data_fd = open(pathname_with_index, O_RDONLY);
 
         if (data_fd != -1) {    /* user's index file */
-            if (l2 + 1 > sizeof(req->request_uri)) {
-                errno = ENOMEM;
-                boa_perror(req, "pathname_with_index not large enough for pathname + index");
-                close(data_fd);
-                return -1;
-            }
+            /* We have to assume that directory_index will fit, because
+             * if it doesn't, well, that's a huge configuation problem.
+             * this is only the 'index.html' pathname for mime type
+             */
             memcpy(req->request_uri, directory_index, l2 + 1); /* for mimetype */
             fstat(data_fd, statbuf);
             return data_fd;
@@ -521,7 +536,7 @@ int get_dir(request * req, struct stat *statbuf)
                 free(req->pathname);
             req->pathname = strdup(pathname_with_index);
             if (!req->pathname) {
-                log_error_time();
+                log_error_doc(req);
                 perror("strdup");
                 send_r_error(req);
                 return 0;
@@ -647,7 +662,7 @@ int index_directory(request * req, char *dest_filename)
     if (request_dir == NULL) {
         int errno_save = errno;
         send_r_error(req);
-        log_error_time();
+        log_error_doc(req);
         fprintf(stderr, "directory \"%s\": ", req->pathname);
         errno = errno_save;
         perror("opendir");

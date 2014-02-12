@@ -62,7 +62,7 @@ int process_cgi_header(request * req)
     if (c == NULL) {
         c = strstr(buf, "\n\n");
         if (c == NULL) {
-            log_error_time();
+            log_error_doc(req);
             fputs("cgi_header: unable to find LFLF\n", stderr);
 #ifdef FASCIST_LOGGING
             log_error_time();
@@ -92,7 +92,7 @@ int process_cgi_header(request * req)
 
 
         if (buf[10] == '/') {   /* virtual path */
-            log_error_time();
+            log_error_doc(req);
             fprintf(stderr,
                     "server does not support internal redirection: "
                     "\"%s\"\n", buf + 10);
@@ -155,7 +155,7 @@ int process_cgi_header(request * req)
 
         if (dest + howmuch > req->buffer + BUFFER_SIZE) {
             /* big problem */
-            log_error_time();
+            log_error_doc(req);
             fprintf(stderr, "Too much data to move! Aborting! %s %d\n",
                     __FILE__, __LINE__);
             /* reset buffer pointers because we already called

@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: read.c,v 1.49.2.5 2003/02/18 17:05:02 jnelson Exp $*/
+/* $Id: read.c,v 1.49.2.6 2003/02/19 03:26:51 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -39,7 +39,7 @@
 int read_header(request * req)
 {
     int bytes;
-    char *check, *buffer;
+    unsigned char *check, *buffer;
 
     check = req->client_stream + req->parse_pos;
     buffer = req->client_stream;
@@ -54,6 +54,17 @@ int read_header(request * req)
     }
 #endif
     while (check < (buffer + bytes)) {
+        /* check for illegal characters here
+         * Anything except CR, LF, and US-ASCII - control is legal
+         * We accept tab but don't do anything special with it.
+         */
+        if (*check != '\r' && *check != '\n' && *check != '\t' &&
+            (*check < 32 || *check > 127)) {
+            log_error_doc(req);
+            fprintf(stderr, "Illegal character (%d) in stream.\n", (unsigned int) *check);
+            send_r_bad_request(req);
+            return 0;
+        }
         switch (req->status) {
         case READ_HEADER:
             if (*check == '\r') {
@@ -104,6 +115,15 @@ int read_header(request * req)
         if (req->status == ONE_LF) {
             *req->header_end = '\0';
 
+            if (req->header_end - req->header_line >= MAX_HEADER_LENGTH) {
+                log_error_doc(req);
+                fprintf(stderr, "Header \"%s\" too long at %d bytes.\n",
+                        req->header_line,
+                        req->header_end - req->header_line);
+                send_r_bad_request(req);
+                return 0;
+            }
+
             /* terminate string that begins at req->header_line */
 
             if (req->logline) {
@@ -111,7 +131,6 @@ int read_header(request * req)
                     return 0;
                 }
             } else {
-                req->logline = req->header_line;
                 if (process_logline(req) == 0)
                     return 0;
                 if (req->http_version == HTTP09)
@@ -161,7 +180,7 @@ int read_header(request * req)
                     content_length = boa_atoi(req->content_length);
                     /* Is a content-length of 0 legal? */
                     if (content_length < 0) {
-                        log_error_time();
+                        log_error_doc(req);
                         fprintf(stderr,
                                 "Invalid Content-Length [%s] on POST!\n",
                                 req->content_length);
@@ -170,7 +189,7 @@ int read_header(request * req)
                     }
                     if (single_post_limit
                         && content_length > single_post_limit) {
-                        log_error_time();
+                        log_error_doc(req);
                         fprintf(stderr,
                                 "Content-Length [%d] > SinglePostLimit [%d] on POST!\n",
                                 content_length, single_post_limit);
@@ -183,7 +202,7 @@ int read_header(request * req)
                         req->header_end = req->header_line + req->filesize;
                     }
                 } else {
-                    log_error_time();
+                    log_error_doc(req);
                     fprintf(stderr, "Unknown Content-Length POST!\n");
                     send_r_bad_request(req);
                     return 0;
@@ -205,8 +224,8 @@ int read_header(request * req)
 
         buf_bytes_left = CLIENT_STREAM_SIZE - req->client_stream_pos;
         if (buf_bytes_left < 1 || buf_bytes_left > CLIENT_STREAM_SIZE) {
-            log_error_time();
-            fputs("buffer overrun - read.c, read_header - closing\n",
+            log_error_doc(req);
+            fputs("No space left in client stream buffer, closing\n",
                   stderr);
             req->status = DEAD;
             return 0;
@@ -307,7 +326,7 @@ int read_body(request * req)
         }
     } else if (bytes_read == 0) {
         /* this is an error.  premature end of body! */
-        log_error_time();
+        log_error_doc(req);
         fprintf(stderr, "%s:%d - Premature end of body!!\n",
                 __FILE__, __LINE__);
         send_r_bad_request(req);

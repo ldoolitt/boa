@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: select.c,v 1.1.2.12 2003/01/23 04:17:40 jnelson Exp $*/
+/* $Id: select.c,v 1.1.2.13 2003/02/19 03:06:48 jnelson Exp $*/
 
 /* algorithm:
  * handle any signals
@@ -75,7 +75,7 @@ void loop(int server_s)
                 sigterm_stage2_run(); /* terminal */
             }
         } else {
-            if (total_connections + 20 > max_connections) {
+            if (total_connections > max_connections) {
                 /* FIXME: for poll we don't subtract 20. why? */
                 BOA_FD_CLR(req, server_s, &block_read_fdset);
             } else {

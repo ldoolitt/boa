@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: boa.h,v 1.63.2.18 2003/02/02 05:02:19 jnelson Exp $*/
+/* $Id: boa.h,v 1.63.2.19 2003/02/19 03:03:31 jnelson Exp $*/
 
 #ifndef _BOA_H
 #define _BOA_H
@@ -71,7 +71,7 @@ char *get_mime_type(const char *filename);
 char *get_home_dir(const char *name);
 void dump_mime(void);
 void dump_passwd(void);
-void show_hash_stats(void);
+void hash_show_stats(void);
 void add_mime_type(const char *extension, const char *type);
 
 /* log */
@@ -213,11 +213,11 @@ int net_port(struct SOCKADDR *s);
 void loop(int server_s);
 
 /* range.c */
-void reset_ranges(request * req);
+void ranges_reset(request * req);
 Range *range_pool_pop(void);
 void range_pool_empty(void);
 void range_pool_push(Range * r);
-int fixup_ranges(request * req);
-int parse_range(request * req, const char *str);
+int ranges_fixup(request * req);
+int range_parse(request * req, const char *str);
  
 #endif

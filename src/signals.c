@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: signals.c,v 1.37.2.8 2003/01/14 05:28:24 jnelson Exp $*/
+/* $Id: signals.c,v 1.37.2.9 2003/02/19 03:05:49 jnelson Exp $*/
 
 #include "boa.h"
 #ifdef HAVE_SYS_WAIT_H
@@ -229,6 +229,6 @@ void sigalrm_run(void)
     log_error_time();
     fprintf(stderr, "%ld requests, %ld errors\n",
             status.requests, status.errors);
-    show_hash_stats();
+    hash_show_stats();
     sigalrm_flag = 0;
 }

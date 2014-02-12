@@ -3,7 +3,7 @@
  *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
  *  Some changes Copyright (C) 1996,97 Larry Doolittle <ldoolitt@boa.org>
  *  Some changes Copyright (C) 1996 Charles F. Randall <crandall@goldsys.com>
- *  Some changes Copyright (C) 1997-2002 Jon Nelson <jnelson@boa.org>
+ *  Some changes Copyright (C) 1997-2003 Jon Nelson <jnelson@boa.org>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -21,11 +21,12 @@
  *
  */
 
-/* $Id: cgi.c,v 1.83.2.18 2003/02/18 16:21:17 jnelson Exp $ */
+/* $Id: cgi.c,v 1.83.2.19 2003/02/19 02:56:20 jnelson Exp $ */
 
 #include "boa.h"
 
-static char *env_gen_extra(const char *key, const char *value, unsigned int extra);
+static char *env_gen_extra(const char *key, const char *value,
+                           unsigned int extra);
 
 int verbose_cgi_logs = 0;
 /* The +1 is for the the NULL in complete_env */
@@ -57,9 +58,9 @@ void create_common_env(void)
        equivalent to a zero-length (NULL) value, and vice versa."
      */
     common_cgi_env[ix++] = env_gen_extra("PATH",
-                                            ((cgi_path !=
-                                              NULL) ? cgi_path :
-                                             DEFAULT_PATH), 0);
+                                         ((cgi_path !=
+                                           NULL) ? cgi_path :
+                                          DEFAULT_PATH), 0);
     common_cgi_env[ix++] =
         env_gen_extra("SERVER_SOFTWARE", SERVER_VERSION, 0);
     common_cgi_env[ix++] = env_gen_extra("SERVER_NAME", server_name, 0);
@@ -79,12 +80,11 @@ void create_common_env(void)
 #endif
 
     /* APACHE added */
-    common_cgi_env[ix++] =
-        env_gen_extra("SERVER_ADMIN", server_admin, 0);
+    common_cgi_env[ix++] = env_gen_extra("SERVER_ADMIN", server_admin, 0);
     common_cgi_env[ix] = NULL;
 
     /* Sanity checking -- make *sure* the memory got allocated */
-    if (ix > COMMON_CGI_COUNT) {
+    if (ix != COMMON_CGI_COUNT) {
         log_error_time();
         fprintf(stderr, "COMMON_CGI_COUNT not high enough.\n");
         exit(1);
@@ -117,7 +117,8 @@ void clear_common_env(void)
  *       (and via a not-so-tricky #define, env_gen)
  * This routine calls malloc: please free the memory when you are done
  */
-static char *env_gen_extra(const char *key, const char *value, unsigned int extra)
+static char *env_gen_extra(const char *key, const char *value,
+                           unsigned int extra)
 {
     char *result;
     unsigned int key_len, value_len;
@@ -137,8 +138,7 @@ static char *env_gen_extra(const char *key, const char *value, unsigned int extr
         log_error_time();
         perror("malloc");
         log_error_time();
-        fprintf(stderr,
-                "tried to allocate (key=value) extra=%d: %s=%s\n",
+        fprintf(stderr, "tried to allocate (key=value) extra=%d: %s=%s\n",
                 extra, key, value);
     }
     return result;
@@ -151,7 +151,8 @@ static char *env_gen_extra(const char *key, const char *value, unsigned int extr
  * Used for HTTP_ headers
  */
 
-int add_cgi_env(request * req, const char *key, const char *value, int http_prefix)
+int add_cgi_env(request * req, const char *key, const char *value,
+                int http_prefix)
 {
     char *p;
     unsigned int prefix_len;
@@ -165,19 +166,21 @@ int add_cgi_env(request * req, const char *key, const char *value, int http_pref
     if (req->cgi_env_index < CGI_ENV_MAX) {
         p = env_gen_extra(key, value, prefix_len);
         if (!p) {
-            log_error_time();
-            fprintf(stderr, "Unable to generate additional CGI Environment"
+            log_error_doc(req);
+            fprintf(stderr,
+                    "Unable to generate additional CGI environment "
                     "variable -- ran out of memory!\n");
-	    return 0;
+            return 0;
         }
         if (prefix_len)
             memcpy(p, "HTTP_", 5);
         req->cgi_env[req->cgi_env_index++] = p;
         return 1;
     } else {
-        log_error_time();
-        fprintf(stderr, "Unable to generate additional CGI Environment"
-                "variable -- not enough space!\n");
+        log_error_doc(req);
+        fprintf(stderr, "Unable to generate additional CGI Environment "
+                "variable \"%s%s=%s\" -- not enough space!\n",
+                (prefix_len ? "HTTP_" : ""), key, value);
     }
     return 0;
 }
@@ -223,7 +226,8 @@ int complete_env(request * req)
     if (req->header_host)
         my_add_cgi_env(req, "HTTP_HOST", req->header_host);
     my_add_cgi_env(req, "SERVER_ADDR", req->local_ip_addr);
-    my_add_cgi_env(req, "SERVER_PROTOCOL", http_ver_string(req->http_version));
+    my_add_cgi_env(req, "SERVER_PROTOCOL",
+                   http_ver_string(req->http_version));
     my_add_cgi_env(req, "REQUEST_URI", req->request_uri);
 
     if (req->path_info)
@@ -262,7 +266,7 @@ int complete_env(request * req)
         req->cgi_env[req->cgi_env_index] = NULL; /* terminate */
         return 1;
     }
-    log_error_time();
+    log_error_doc(req);
     fprintf(stderr, "Not enough space in CGI environment for remainder"
             " of variables.\n");
     return 0;
@@ -330,7 +334,9 @@ void create_argv(request * req, char **aargv)
         /* we have an 'index' style */
         q = strdup(q);
         if (!q) {
-            WARN("unable to strdup 'q' in create_argv!");
+            log_error_doc(req);
+            fputs("unable to strdup 'q' in create_argv!\n", stderr);
+            _exit(1);
         }
         for (aargc = 1; q && (aargc < CGI_ARGC_MAX);) {
             r = q;
@@ -393,17 +399,17 @@ int init_cgi(request * req)
     /* otherwise (NPH, gunzip) we want no pipes */
     if (req->cgi_type == CGI ||
         (!req->cgi_type &&
-        (req->pathname[strlen(req->pathname) - 1] == '/'))) {
+         (req->pathname[strlen(req->pathname) - 1] == '/'))) {
         use_pipes = 1;
         if (pipe(pipes) == -1) {
-            log_error_time();
+            log_error_doc(req);
             perror("pipe");
             return 0;
         }
 
         /* set the read end of the socket to non-blocking */
         if (set_nonblock_fd(pipes[0]) == -1) {
-            log_error_time();
+            log_error_doc(req);
             perror("cgi-fcntl");
             close(pipes[0]);
             close(pipes[1]);
@@ -415,7 +421,7 @@ int init_cgi(request * req)
     switch (child_pid) {
     case -1:
         /* fork unsuccessful */
-        log_error_time();
+        log_error_doc(req);
         perror("fork");
 
         if (use_pipes) {
@@ -439,8 +445,10 @@ int init_cgi(request * req)
             c = strrchr(req->pathname, '/');
             if (!c) {
                 /* there will always be a '.' */
-                log_error_time();
-                fprintf(stderr, "unable to find '/' in req->pathname: \"%s\"\n", req->pathname);
+                log_error_doc(req);
+                fprintf(stderr,
+                        "unable to find '/' in req->pathname: \"%s\"\n",
+                        req->pathname);
                 if (use_pipes)
                     close(pipes[1]);
                 _exit(1);
@@ -450,8 +458,9 @@ int init_cgi(request * req)
 
             if (chdir(req->pathname) != 0) {
                 int saved_errno = errno;
-                log_error_time();
-                fprintf(stderr, "Could not chdir to \"%s\":", req->pathname);
+                log_error_doc(req);
+                fprintf(stderr, "Could not chdir to \"%s\":",
+                        req->pathname);
                 errno = saved_errno;
                 perror("chdir");
                 if (use_pipes)
@@ -466,7 +475,7 @@ int init_cgi(request * req)
             newpath = malloc(sizeof (char) * l);
             if (!newpath) {
                 /* there will always be a '.' */
-                log_error_time();
+                log_error_doc(req);
                 perror("unable to malloc for newpath");
                 if (use_pipes)
                     close(pipes[1]);
@@ -483,7 +492,7 @@ int init_cgi(request * req)
             close(pipes[0]);
             /* tie cgi's STDOUT to our write end of pipe */
             if (dup2(pipes[1], STDOUT_FILENO) == -1) {
-                log_error_time();
+                log_error_doc(req);
                 perror("dup2 - pipes");
                 _exit(1);
             }
@@ -491,7 +500,7 @@ int init_cgi(request * req)
         } else {
             /* tie stdout to socket */
             if (dup2(req->fd, STDOUT_FILENO) == -1) {
-                log_error_time();
+                log_error_doc(req);
                 perror("dup2 - fd");
                 _exit(1);
             }
@@ -499,7 +508,7 @@ int init_cgi(request * req)
         }
         /* Switch socket flags back to blocking */
         if (set_block_fd(STDOUT_FILENO) == -1) {
-            log_error_time();
+            log_error_doc(req);
             perror("cgi-fcntl");
             _exit(1);
         }
@@ -529,7 +538,7 @@ int init_cgi(request * req)
         } else {
             if (req->pathname[strlen(req->pathname) - 1] == '/')
                 execl(dirmaker, dirmaker, req->pathname, req->request_uri,
-                     (void *)  NULL);
+                      (void *) NULL);
 #ifdef GUNZIP
             else
                 execl(GUNZIP, GUNZIP, "--stdout", "--decompress",
@@ -537,8 +546,9 @@ int init_cgi(request * req)
 #endif
         }
         /* execve failed */
-        log_error_time();
-        fprintf(stderr, "Unable to execve/execl pathname: \"%s\"", req->pathname);
+        log_error_doc(req);
+        fprintf(stderr, "Unable to execve/execl pathname: \"%s\"",
+                req->pathname);
         perror("");
         _exit(1);
         break;

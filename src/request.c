@@ -2,7 +2,7 @@
  *  Boa, an http server
  *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
  *  Some changes Copyright (C) 1996,97 Larry Doolittle <ldoolitt@boa.org>
- *  Some changes Copyright (C) 1996-2002 Jon Nelson <jnelson@boa.org>
+ *  Some changes Copyright (C) 1996-2003 Jon Nelson <jnelson@boa.org>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: request.c,v 1.112.2.34 2003/02/18 16:24:57 jnelson Exp $*/
+/* $Id: request.c,v 1.112.2.37 2003/02/21 04:19:49 jnelson Exp $*/
 
 #include "boa.h"
 #include <stddef.h>             /* for offsetof */
@@ -255,7 +255,7 @@ void get_request(int server_sock)
 
     total_connections++;
     /* gotta have some breathing room */
-    if (total_connections + 20 > max_connections) {
+    if (total_connections > max_connections) {
         pending_requests = 0;
     }
     enqueue(&request_ready, conn);
@@ -371,9 +371,9 @@ static void free_request(request * req)
     if (req->host)
         free(req->host);
     if (req->ranges)
-        reset_ranges(req);
+        ranges_reset(req);
 
-    if ((req->keepalive == KA_ACTIVE) &&
+    if (req->status != DEAD && (req->keepalive == KA_ACTIVE) &&
         (req->response_status < 500) && req->kacount > 0) {
         sanitize_request(req, 0);
 
@@ -583,6 +583,8 @@ int process_logline(request * req)
 {
     char *stop, *stop2;
 
+    req->logline = req->client_stream;
+
     if (strlen(req->logline) < 5) {
         /* minimum length req'd. */
         log_error_doc(req);
@@ -639,27 +641,16 @@ int process_logline(request * req)
         /* advance STOP until first '/' after host */
         stop += strlen(SERVER_METHOD) + 3;
         host = stop;
-        if (*host == '/') {
-            /* no host in absolute URI */
-            log_error_doc(req);
-            fprintf(stderr, "no host in absolute URI: \"%s\"\n",
-                    req->logline);
-            send_r_bad_request(req);
-            return(0);
-        } else if (*host == ' ') {
-            /* Corruption in absolute URI */
-            /* This prevents a DoS attack from format string attacks */
-            log_error_doc(req);
-            fprintf(stderr, "corruption in absolute URI: \"%s\"\n",
-                    req->logline);
-            send_r_bad_request(req);
-            return(0);
-        } else if (*host == '\0') {
+        /* if *host is '/' there is no host in the URI
+         * if *host is ' ' there is corruption in the URI
+         * if *host is '\0' there is nothing after http://
+         */
+        if (*host == '/' || *host == ' ' || *host == '\0') {
             /* nothing *at all* after http:// */
             /* no host in absolute URI */
             log_error_doc(req);
-            fprintf(stderr, "nothing after http:// in absolute URI: \"%s\"\n",
-                    req->logline);
+            /* we don't need to log req->logline, because log_error_doc does */
+            fprintf(stderr, "bogus absolute URI\n");
             send_r_bad_request(req);
             return(0);
         }
@@ -686,7 +677,7 @@ int process_logline(request * req)
             /* Corruption in absolute URI */
             /* This prevents a DoS attack from format string attacks */
             log_error_doc(req);
-            fprintf(stderr, "Error: corruption in absolute URI:" 
+            fprintf(stderr, "Error: corruption in absolute URI:"
                 "\"%s\".  This should not happen.\n", req->logline);
             send_r_bad_request(req);
             return(0);
@@ -935,7 +926,6 @@ int process_option_line(request * req)
         }
         break;
     case 'R':
-
         /* Need agent and referer for logs */
         if (!memcmp(line, "REFERER", 8)) {
             req->header_referer = value;
@@ -945,7 +935,7 @@ int process_option_line(request * req)
             if (req->ranges && req->ranges->stop == INT_MAX) {
                 /* there was an error parsing, ignore */
                 return 1;
-            } else if (!parse_range(req, value)) {
+            } else if (!range_parse(req, value)) {
                 /* unable to parse range */
                 send_r_invalid_range(req);
                 return 0;

@@ -1,7 +1,7 @@
 /*
  *  Boa, an http server
  *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
- *  Some changes Copyright (C) 1999 Jon Nelson <jnelson@boa.org>
+ *  Some changes Copyright (C) 1999-2003 Jon Nelson <jnelson@boa.org>
 
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@
  *
  */
 
-/* $Id: buffer.c,v 1.10.2.4 2003/01/14 05:27:49 jnelson Exp $ */
+/* $Id: buffer.c,v 1.10.2.6 2003/02/22 22:11:15 jnelson Exp $ */
 
 #include "boa.h"
 #include "escape.h"
@@ -44,8 +44,16 @@ int req_write(request * req, const char *msg)
         return req->buffer_end;
 
     if (req->buffer_end + msg_len > BUFFER_SIZE) {
-        log_error_time();
-        fprintf(stderr, "Ran out of Buffer space!\n");
+        log_error_doc(req);
+        fprintf(stderr, "There is not enough room in the buffer to"
+                " copy %d bytes (%d available). Shutting down connection.\n",
+                msg_len,
+                BUFFER_SIZE - req->buffer_end);
+#ifdef FACSIST_LOGGING
+        *(req->buffer + req->buffer_end) = '\0';
+        fprintf(stderr, "The request looks like this:\n%s\n",
+                req->buffer);
+#endif
         req->status = DEAD;
         return -1;
     }
@@ -76,8 +84,8 @@ int req_write_escape_http(request * req, const char *msg)
     dest = req->buffer + req->buffer_end;
     /* 3 is a guard band, since we don't check the destination pointer
      * in the middle of a transfer of up to 3 bytes */
-    left = BUFFER_SIZE - req->buffer_end - 3;
-    while ((c = *inp++) && left > 0) {
+    left = BUFFER_SIZE - req->buffer_end;
+    while ((c = *inp++) && left >= 3) {
         if (needs_escape((unsigned int) c)) {
             *dest++ = '%';
             *dest++ = INT_TO_HEX(c >> 4);
@@ -88,10 +96,21 @@ int req_write_escape_http(request * req, const char *msg)
             left--;
         }
     }
+    --inp;
     req->buffer_end = dest - req->buffer;
-    if (left == 0) {
-        log_error_time();
-        fprintf(stderr, "Ran out of Buffer space!\n");
+
+#ifdef TESTING
+    if (left < 0) {
+        log_error_time(); /* don't use log_error_doc here */
+        fprintf(stderr, "Overflowed buffer space!\n");
+        chdir("/tmp");
+        abort();
+    }
+#endif
+
+    if (*inp != '\0') {
+        log_error_doc(req);
+        fprintf(stderr, "Ran out of Buffer space! [req_write_escape_http]\n");
         req->status = DEAD;
         return -1;
     }
@@ -113,10 +132,11 @@ int req_write_escape_html(request * req, const char *msg)
 
     inp = msg;
     dest = req->buffer + req->buffer_end;
-    /* 5 is a guard band, since we don't check the destination pointer
-     * in the middle of a transfer of up to 5 bytes */
-    left = BUFFER_SIZE - req->buffer_end - 5;
-    while ((c = *inp++) && left > 0) {
+    /* 6 is a guard band, since we don't check the destination pointer
+     * in the middle of a transfer of up to 6 bytes
+     */
+    left = BUFFER_SIZE - req->buffer_end;
+    while ((c = *inp++) && left >= 6) {
         switch (c) {
         case '>':
             *dest++ = '&';
@@ -154,10 +174,22 @@ int req_write_escape_html(request * req, const char *msg)
             left--;
         }
     }
+    --inp;
     req->buffer_end = dest - req->buffer;
-    if (left == 0) {
-        log_error_time();
-        fprintf(stderr, "Ran out of Buffer space!\n");
+
+#ifdef TESTING
+    if (left < 0) {
+        log_error_time(); /* don't use log_error_doc here */
+        fprintf(stderr, "Overflowed buffer space! [req_write_escape_html]\n");
+        chdir("/tmp");
+        abort();
+    }
+#endif
+
+    if (*inp != '\0') {
+        log_error_doc(req);
+        fprintf(stderr, "Ran out of Buffer space (%d chars left)! "
+                "[req_write_escape_html]\n", left);
         req->status = DEAD;
         return -1;
     }
@@ -225,7 +257,7 @@ int req_flush(request * req)
  * Returns: NULL on error, pointer to string otherwise.
  * Note: this function doesn't really belong here, I plopped it here to
  *  work around a "bug" in escape.h (it defines a global, so can't be
- *  used in multiple source files).  Actually, this routine shouldn't 
+ *  used in multiple source files).  Actually, this routine shouldn't
  *  exist anywhere, it's only usage is in get.c's handling of on-the-fly
  *  directory generation, which would be better configured to use a combination
  *  of req_write_escape_http and req_write_escape_html.  That would involve

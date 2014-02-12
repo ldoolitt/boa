@@ -1,4 +1,3 @@
-
 /*
  *  Boa, an http server
  *  This file Copyright (C) 2000 by:
@@ -30,12 +29,12 @@
 #define DEBUG if
 #define DEBUG_RANGE 0
 
-void abort_range(request * req);
-void add_range(request * req, unsigned long start, unsigned long stop);
+static void range_abort(request * req);
+static void range_add(request * req, unsigned long start, unsigned long stop);
 
 Range *range_pool = NULL;
 
-void reset_ranges(request * req)
+void ranges_reset(request * req)
 {
     Range *r = req->ranges;
 
@@ -82,17 +81,17 @@ void range_pool_push(Range * r)
     range_pool = r;
 }
 
-void abort_range(request * req)
+static void range_abort(request * req)
 {
     /* free all ranges starting with head */
-    reset_ranges(req);
+    ranges_reset(req);
 
     /* flag that we had an error, so no future ranges will be accepted */
     req->ranges = range_pool_pop();
     req->ranges->stop = ULONG_MAX;
 }
 
-void add_range(request * req, unsigned long start, unsigned long stop)
+static void range_add(request * req, unsigned long start, unsigned long stop)
 {
     Range *prev;
     Range *r = range_pool_pop();
@@ -121,7 +120,7 @@ void add_range(request * req, unsigned long start, unsigned long stop)
  * we know the size of the file.  fixup_ranges touches up that
  * binary form _after_ we have req->filesize to work with.
  */
-int fixup_ranges(request * req)
+int ranges_fixup(request * req)
 {
     /* loop through the ranges */
     Range *prev, *r;
@@ -217,7 +216,7 @@ int fixup_ranges(request * req)
  * Individual ranges are recorded using add_range.  "-1" is used
  * as a marker for "not given" (as with 33- and -44 above).
  */
-int parse_range(request * req, const char *str)
+int range_parse(request * req, const char *str)
 {
 
 #ifdef FASCIST_LOGGING
@@ -326,10 +325,10 @@ int parse_range(request * req, const char *str)
             else if ((fcode & ACTMASK1) == DE)
                 stop = ULONG_MAX;
             if ((fcode & ACTMASK2) == AR) {
-                abort_range(req);
+                range_abort(req);
                 return 0;
             } else if ((fcode & ACTMASK2) == SR) {
-                add_range(req, start, stop);
+                range_add(req, start, stop);
                 start = 0;
                 stop = 0;
             }

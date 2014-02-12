@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: poll.c,v 1.2.2.11 2003/02/07 19:34:12 jnelson Exp $*/
+/* $Id: poll.c,v 1.2.2.12 2003/02/19 03:06:48 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -80,7 +80,7 @@ void loop(int server_s)
                 sigterm_stage2_run();
             }
         } else {
-            if (total_connections + 20 < max_connections) {
+            if (total_connections < max_connections) {
                 server_pfd = pfd_len++;
                 pfds[server_pfd].fd = server_s;
                 pfds[server_pfd].events = BOA_READ;

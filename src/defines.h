@@ -19,7 +19,7 @@
  *
  */
 
-/* $Id: defines.h,v 1.107.2.27 2003/02/18 16:21:35 jnelson Exp $*/
+/* $Id: defines.h,v 1.107.2.29 2003/02/22 22:11:31 jnelson Exp $*/
 
 #ifndef _DEFINES_H
 #define _DEFINES_H
@@ -70,7 +70,7 @@
 #endif
 
 #ifndef SERVER_VERSION
-#define SERVER_VERSION 				"Boa/0.94.14rc15"
+#define SERVER_VERSION 				"Boa/0.94.14rc16"
 #endif
 
 #define CGI_VERSION				"CGI/1.1"
@@ -81,7 +81,7 @@
 #define COMMON_CGI_COUNT 6
 #endif
 
-#define CGI_ENV_MAX     50
+#define CGI_ENV_MAX     100
 #define CGI_ARGC_MAX 128
 
 #define SERVER_METHOD "http"
