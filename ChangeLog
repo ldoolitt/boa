@@ -1,3 +1,132 @@
+** Changes from 0.94.13 to 0.94.14
+ * SUBSTANTIALLY UPDATE AUTOCONF SYSTEM
+   - all of the autoconf stuff is now located in the top level
+     directory, and creates the appropriate Makefiles for building
+     the system and documentation.
+ * add [optional, Linux-only] check for sendfile system call
+ * add new state, IOSHUFFLE, which utilizes sendfile (or
+   emulates it using the request's buffer, otherwise)
+ * make the default socket size 32K.  The client_stream_size stays constant
+   at 8K, and the new 'buffer' size is 4K
+   Note also that the new code uses the "default" socket buffer size
+   it obtains with the first accept()ed socket.
+ * use setjmp, instead of sigsetjmp (we dont mess with the signal mask
+   so why bother!  it's one less syscall)
+ * explicitly set pending_requests to 0 in select.c when sigterm_flag has
+   been set, and also when the server socket is *not* set despite checking
+   for it.   
+ * make default behavior be to leave stderr alone, but tie it
+   to cgilog otherwise
+ * add initial vhost_root support
+ * remove support for normalize_path
+ * use --disable-sendfile to disable sendfile support
+   sendfile support for files > 100K is default, now. 
+   It's significantly faster and easier than the alternative
+ * add "Host" header support to CGI environment
+ * umask ~0770 before exec
+ * backport hash.c from 0.95 and use fnv1a hash (see CREDITS)
+ * don't set stderr close-on-exec
+ * make some minor for very useful optimizations in the read/write 
+   loop for CGIs
+ * make some adjustments for Solaris and other platforms
+ * add yyerror function definition to boa_lexer.l
+ * tie stdout to the access_log, unless there is no access_log,
+   in which case tie it to /dev/null
+ * use sensible defaults for umask (077) and (027 for CGI)
+ * add and document new parameters (CGILog and CGIumask)
+ * vast improvements to the cgi-test.cgi program, by Jon Nelson
+   and Landon Curt Noll.
+ * next 3 items by Don Mahurin (patches modified somewhat):
+ * pidfile patch
+ * default mime_types patch
+ * NCSA environment environment variables wrapped in 
+   #ifdef USE_NCSA_CGI_ENV
+ * fix some escaping issues with the directory indexer
+   (Ulf Harnhammar)
+ * backport poll support from 0.95
+ * remove support for lex/yacc (backported from 0.95)
+ * add conditional support for http/1.1
+ * replace many #defines with enumerations
+ * update specfile (thanks to Supreet Sethi via SourceForge)
+ * support optional config file name argument
+ * tentatively support Ranges
+ * dummy install target and some cleanups for *BSD
+ * update index_dir.c to be *really* safe WRT html and http escaping*
+   * Note to self - please make that code less ugly
+ * basic access (Allow/Deny) control
+ * fix check-for-broken-setuid check in boa.c -- root *is* a legal user
+ * fix reversed argument passing in add_mime_type
+ * disable-gunzip support
+ * capitalization changes, etc.. to configure.in
+ * use slightly newer AC_DEFINE 3-argument style in configure.in
+ * add new member of struct, bytes_written, and use it to more accurately
+   report the number of bytes actually written to the socket.
+ * When sendfile(2) reports ECONNRESET treat it like EPIPE, which is to 
+   say silently shut it down and don't be noisy about logging it.
+ * wrap sa_family_t typedef in
+   #ifdef DONT_HAVE_SA_FAMILY_T
+   to deal with non-POSIX (1g) systems (Cygwin?)
+ * add req->bytes_written member variable, and use it instead of filepos
+ * apply Peter Korsgaard's "configure --help" patch
+ * apply Peter Korsgaard's "configure --disable-gunzip" patch
+ * use newer 3-argument AC_DEFINE
+ * update config.sub and config.guess
+ * clean up and update configure.in somewhat
+ * don't close stderr in terminal signal handlers
+ * free range pool and server_name in (final) sigterm handler
+ * refactor select and poll loops
+ * change to using PF_ prefix instead of AF_ prefix (PF_ is POSIX?)
+ * fix copying too-much-memory (read-side, write-side was OK) in 
+   ascii_sockaddr.  Also optimize slightly (note, may actually be a wee
+   slower due to strlen check -- is there a way around this?)
+ * fix a few shadow variable problems and improve select and poll loops
+ * check for and use madvise (may or may not help)
+ * update depends (the cause of SIGSEGs when ./configure was re-run to
+   switch from select to poll, *without* running make clean)
+ * always remove select.o and poll.o (and access.o) because these are
+   the usual conditional files.
+ * if we aren't using IPv6, define BOA_NI_MAXHOST to 20. 1025 is 
+   far too huge for a single IPv4 IP address in dotted-quad notation.
+ * move access_init to earlier in the config reading
+ * allow a MAX_FILE_MMAP value of 0 to mean "always mmap"
+ * fix 'HEAD' requests (bug introduced in rc6)
+ * *huge* patch to try to eliminate shadow variables, use unsigned ints
+   instead of signed ints, and "const" where appropriate.
+ * check for and use __func__, a C99 construct that is used
+   in the DIE and WARN macros to also describe the name of the current
+   function.
+ * fix a very minor IPv6 issue, and include netdb.h in compat.h so that
+   NI_MAXHOST is defined for IPv6
+ * when we can't mmap a file, fall back to IOSHUFFLE.  If we couldn't
+   mmap the file due to an error in mmap or madvise, report the error,
+   otherwise it is safe to assume we simply ran out of hash table space.
+   This was reported by Davide Pagnin
+ * The following 2 changes borrowed from Hydra (which is itself 
+   based on Boa):
+   * Some optimizations in HTTP header parsing.
+   * Added DefaultCharset configuration directive. If given, the default
+     character set will be appended to the Content-Type for all 
+     'text' mime types.
+ * update boa.texi with some missing configuration directives
+ * force select.c, poll.c, and access.c to always be included in
+   dependency stuff fix use of HAVE_FUNC
+ * if FD_SETSIZE is undefined, set MAX_FD to OPEN_MAX instead of
+   arbitarily setting it to 2048.
+ * improve the poll code slightly
+ * give Boa more breathing room WRT MaxConnections and total current
+   connections -- currently simply set at 20.
+ * forcibly clear the server_s from the block_read_fdset when it won't
+   be checked.
+ * fix more spelling errors (LRD) and remove use of const int
+ * better sa_family_t detection on *BSD (Peter Pentchev) 
+ * fix a potential NULL-pointer dereference when generating
+   CGI environment variables *and* we are extremely low on memory
+ * when unable to set new sockets to non-block or close-on-exec, don't
+   just warn, also close it down and place on the free list.
+ * use log_error_doc in some places instead of log_error_time
+ * clean up logline parsing.  This fixes a potential sigseg!
+ * fix use of ACCEPT_ON #define in process_option_line
+ 
 ** Changes from 0.94.12 to 0.94.13
  * Change many instances of log_error_mesg + exit to DIE macro
  * Change all instance of log_error_mesg (without exit) to WARN macro

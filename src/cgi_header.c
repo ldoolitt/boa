@@ -72,7 +72,7 @@ int process_cgi_header(request * req)
             return 0;
         }
     }
-    if (req->simple) {
+    if (req->http_version == HTTP09) {
         if (*(c + 1) == '\r')
             req->header_line = c + 2;
         else
@@ -94,7 +94,7 @@ int process_cgi_header(request * req)
         if (buf[10] == '/') {   /* virtual path */
             log_error_time();
             fprintf(stderr,
-                    "server does not support internal redirection: " \
+                    "server does not support internal redirection: "
                     "\"%s\"\n", buf + 10);
             send_r_bad_request(req);
 
@@ -135,7 +135,7 @@ int process_cgi_header(request * req)
         return 1;
     } else {                    /* not location and not status */
         char *dest;
-        int howmuch;
+        unsigned int howmuch;
         send_r_request_ok(req); /* does not terminate */
         /* got to do special things because
            a) we have a single buffer divided into 2 pieces

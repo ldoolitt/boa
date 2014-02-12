@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: read.c,v 1.49 2002/03/18 01:53:48 jnelson Exp $*/
+/* $Id: read.c,v 1.49.2.5 2003/02/18 17:05:02 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -38,7 +38,7 @@
 
 int read_header(request * req)
 {
-    int bytes, buf_bytes_left;
+    int bytes;
     char *check, *buffer;
 
     check = req->client_stream + req->parse_pos;
@@ -111,9 +111,10 @@ int read_header(request * req)
                     return 0;
                 }
             } else {
+                req->logline = req->header_line;
                 if (process_logline(req) == 0)
                     return 0;
-                if (req->simple)
+                if (req->http_version == HTTP09)
                     return process_header_end(req);
             }
             /* set header_line to point to beginning of new header */
@@ -159,16 +160,19 @@ int read_header(request * req)
 
                     content_length = boa_atoi(req->content_length);
                     /* Is a content-length of 0 legal? */
-                    if (content_length <= 0) {
+                    if (content_length < 0) {
                         log_error_time();
-                        fprintf(stderr, "Invalid Content-Length [%s] on POST!\n",
+                        fprintf(stderr,
+                                "Invalid Content-Length [%s] on POST!\n",
                                 req->content_length);
                         send_r_bad_request(req);
                         return 0;
                     }
-                    if (single_post_limit && content_length > single_post_limit) {
+                    if (single_post_limit
+                        && content_length > single_post_limit) {
                         log_error_time();
-                        fprintf(stderr, "Content-Length [%d] > SinglePostLimit [%d] on POST!\n",
+                        fprintf(stderr,
+                                "Content-Length [%d] > SinglePostLimit [%d] on POST!\n",
                                 content_length, single_post_limit);
                         send_r_bad_request(req);
                         return 0;
@@ -197,9 +201,10 @@ int read_header(request * req)
 
     if (req->status < BODY_READ) {
         /* only reached if request is split across more than one packet */
+        unsigned int buf_bytes_left;
 
         buf_bytes_left = CLIENT_STREAM_SIZE - req->client_stream_pos;
-        if (buf_bytes_left < 1) {
+        if (buf_bytes_left < 1 || buf_bytes_left > CLIENT_STREAM_SIZE) {
             log_error_time();
             fputs("buffer overrun - read.c, read_header - closing\n",
                   stderr);
@@ -207,7 +212,8 @@ int read_header(request * req)
             return 0;
         }
 
-        bytes = read(req->fd, buffer + req->client_stream_pos, buf_bytes_left);
+        bytes =
+            read(req->fd, buffer + req->client_stream_pos, buf_bytes_left);
 
         if (bytes < 0) {
             if (errno == EINTR)
@@ -219,9 +225,9 @@ int read_header(request * req)
 
                req->status = DEAD;
                return 0;
-               */
+             */
             log_error_doc(req);
-            perror("header read");            /* don't need to save errno because log_error_doc does */
+            perror("header read"); /* don't need to save errno because log_error_doc does */
             return 0;
         } else if (bytes == 0) {
             /*
@@ -272,7 +278,8 @@ int read_header(request * req)
 
 int read_body(request * req)
 {
-    int bytes_read, bytes_to_read, bytes_free;
+    int bytes_read;
+    unsigned int bytes_to_read, bytes_free;
 
     bytes_free = BUFFER_SIZE - (req->header_end - req->header_line);
     bytes_to_read = req->filesize - req->filepos;
@@ -332,7 +339,9 @@ int read_body(request * req)
 
 int write_body(request * req)
 {
-    int bytes_written, bytes_to_write = req->header_end - req->header_line;
+    int bytes_written;
+    unsigned int bytes_to_write = req->header_end - req->header_line;
+
     if (req->filepos + bytes_to_write > req->filesize)
         bytes_to_write = req->filesize - req->filepos;
 

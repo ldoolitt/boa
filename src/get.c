@@ -20,9 +20,18 @@
  *
  */
 
-/* $Id: get.c,v 1.76.2.5 2002/07/26 03:05:59 jnelson Exp $*/
+/* $Id: get.c,v 1.76.2.25 2003/01/20 18:01:15 jnelson Exp $*/
 
 #include "boa.h"
+#include "access.h"
+
+/* I think that permanent redirections (301) are supposed
+ * to be absolute URIs, but they can be troublesome.
+ * change to 1 to allow much simpler redirections.
+ */
+/* #define ALLOW_LOCAL_REDIRECT */
+#define DEBUG if
+#define DEBUG_RANGE 0
 
 /* local prototypes */
 int get_cachedir_file(request * req, struct stat *statbuf);
@@ -41,17 +50,17 @@ int init_get(request * req)
 {
     int data_fd, saved_errno;
     struct stat statbuf;
-    volatile int bytes;
+    volatile unsigned int bytes_free;
 
     data_fd = open(req->pathname, O_RDONLY);
-    saved_errno = errno; /* might not get used */
+    saved_errno = errno;        /* might not get used */
 
 #ifdef GUNZIP
     if (data_fd == -1 && errno == ENOENT) {
         /* cannot open */
         /* it's either a gunzipped file or a directory */
         char gzip_pathname[MAX_PATH_LENGTH];
-        int len;
+        unsigned int len;
 
         len = strlen(req->pathname);
 
@@ -72,8 +81,9 @@ int init_get(request * req)
                 send_r_error(req);
                 return 0;
             }
-            if (!req->simple) {
-                req_write(req, "HTTP/1.0 200 OK-GUNZIP\r\n");
+            if (req->http_version != HTTP09) {
+                req_write(req, http_ver_string(req->http_version));
+                req_write(req, " 200 OK-GUNZIP\r\n");
                 print_http_headers(req);
                 print_content_type(req);
                 print_last_modified(req);
@@ -102,6 +112,13 @@ int init_get(request * req)
         return 0;
     }
 
+#ifdef ACCESS_CONTROL
+    if (!access_allow(req->pathname)) {
+      send_r_forbidden(req);
+      return 0;
+    }
+#endif
+
     fstat(data_fd, &statbuf);
 
     if (S_ISDIR(statbuf.st_mode)) { /* directory */
@@ -109,13 +126,76 @@ int init_get(request * req)
 
         if (req->pathname[strlen(req->pathname) - 1] != '/') {
             char buffer[3 * MAX_PATH_LENGTH + 128];
+            unsigned int len;
 
-            if (server_port != 80)
-                sprintf(buffer, "http://%s:%d%s/", server_name,
-                        server_port, req->request_uri);
-            else
-                sprintf(buffer, "http://%s%s/", server_name,
-                        req->request_uri);
+#ifdef ALLOW_LOCAL_REDIRECT
+            len = strlen(req->request_uri);
+            if (len + 2 > sizeof(buffer)) {
+                send_r_error(req);
+                return 0;
+            }
+            memcpy(buffer, req->request_uri, len);
+            buffer[len] = '/';
+            buffer[len+1] = '\0';
+#else
+            char *host = server_name;
+            unsigned int l2;
+            char *port = NULL;
+            const char *prefix = "http://";
+            static unsigned int l3 = 0;
+            static unsigned int l4 = 0;
+
+            if (l4 == 0) {
+                l4 = strlen(prefix);
+            }
+            len = strlen(req->request_uri);
+            if (!port && server_port != 80) {
+                port = strdup(simple_itoa(server_port));
+                if (port == NULL) {
+                    errno = ENOMEM;
+                    boa_perror(req, "Unable to perform simple_itoa conversion on server port!");
+                    return 0;
+                }
+                l3 = strlen(port);
+            }
+            /* l3 and l4 are done */
+
+            if (req->host) {
+                /* only shows up in vhost mode */
+                /* what about the port? (in vhost_mode?) */
+                /* we don't currently report ports that differ
+                 * from out "bound" (listening) port, so we don't care
+                 */
+                host = req->host;
+            }
+            l2 = strlen(host);
+
+            if (server_port != 80) {
+                if (l4 + l2 + 1 + l3 + len + 1 > sizeof(buffer)) {
+                    errno = ENOMEM;
+                    boa_perror(req, "buffer not large enough for directory redirect");
+                    return 0;
+                }
+                memcpy(buffer, prefix, l4);
+                memcpy(buffer + l4, host, l2);
+                buffer[l4 + l2] = ':';
+                memcpy(buffer + l4 + l2 + 1, port, l3);
+                memcpy(buffer + l4 + l2 + 1 + l3, req->request_uri, len);
+                buffer[l4 + l2 + 1 + l3 + len] = '/';
+                buffer[l4 + l2 + 1 + l3 + len + 1] = '\0';
+            } else {
+                if (l4 + l2 + len + 1 > sizeof(buffer)) {
+                    errno = ENOMEM;
+                    boa_perror(req, "buffer not large enough for directory redirect");
+                    return 0;
+                }
+                memcpy(buffer, prefix, l4);
+                memcpy(buffer + l4, host, l2);
+                memcpy(buffer + l4 + l2, req->request_uri, len);
+                buffer[l4 + l2 + len] = '/';
+                buffer[l4 + l2 + len + 1] = '\0';
+            }
+#endif /* ALLOW LOCAL REDIRECT */
             send_r_moved_perm(req, buffer);
             return 0;
         }
@@ -134,73 +214,142 @@ int init_get(request * req)
         close(data_fd);
         return 0;
     }
+
     req->filesize = statbuf.st_size;
     req->last_modified = statbuf.st_mtime;
 
-    if (req->method == M_HEAD || req->filesize == 0) {
-        send_r_request_ok(req);
+    /* ignore if-range without range */
+    if (req->header_ifrange && !req->ranges)
+        req->header_ifrange = NULL;
+
+    /* we don't support it yet */
+    req->header_ifrange = NULL;
+
+    /* parse ranges now */
+    /* we have to wait until req->filesize exists to fix them up */
+    /* fixup handles handles communicating with the client */
+    if (req->ranges && !fixup_ranges(req)) {
         close(data_fd);
         return 0;
     }
 
+    /* if no range has been set, use default range */
+#if 0
+    DEBUG(DEBUG_RANGE) {
+        log_error_time();
+        fprintf(stderr, "if-range: %s\time_cval: %d\tmtime: %d\n",
+                req->header_ifrange, req->time_cval, statbuf->st_mtime);
+    }
+#endif
+
+    /*
+     If the entity tag given in the If-Range header matches the current
+     entity tag for the entity, then the server should provide the
+     specified sub-range of the entity using a 206 (Partial content)
+     response.
+
+     If the entity tag does not match, then the server should
+     return the entire entity using a 200 (OK) response.
+     */
+    /* IF we have range data *and* no if-range or if-range matches... */
+
+    if (req->filesize == 0) {
+        if (req->http_version < HTTP11) {
+            send_r_request_ok(req);
+            close(data_fd);
+            return 0;
+        }
+        send_r_no_content(req);
+        close(data_fd);
+        return 0;
+    }
+
+#ifdef MAX_FILE_MMAP
     if (req->filesize > MAX_FILE_MMAP) {
-        send_r_request_ok(req); /* All's well */
-        req->status = PIPE_READ;
-        req->cgi_status = CGI_BUFFER;
         req->data_fd = data_fd;
-        req_flush(req);         /* this should *always* complete due to
-                                   the size of the I/O buffers */
-        req->header_line = req->header_end = req->buffer;
-        return 1;
+        req->status = IOSHUFFLE;
+    } else
+#endif
+    {
+        /* NOTE: I (Jon Nelson) tried performing a read(2)
+         * into the output buffer provided the file data would
+         * fit, before mmapping, and if successful, writing that
+         * and stopping there -- all to avoid the cost
+         * of a mmap.  Oddly, it was *slower* in benchmarks.
+         */
+        req->mmap_entry_var = find_mmap(data_fd, &statbuf);
+        if (req->mmap_entry_var == NULL) {
+            req->data_fd = data_fd;
+            req->status = IOSHUFFLE;
+        } else {
+            req->data_mem = req->mmap_entry_var->mmap;
+            close(data_fd);             /* close data file */
+        }
     }
 
-    if (req->filesize == 0) {  /* done */
-        send_r_request_ok(req);     /* All's well *so far* */
-        close(data_fd);
-        return 1;
+    if (!req->ranges) {
+        req->ranges = range_pool_pop();
+        req->ranges->start = 0;
+        req->ranges->stop = req->filesize - 1;
+        send_r_request_ok(req);
+    } else {
+        /* FIXME: support if-range header here, by the following logic:
+         * if !req->header_ifrange || st_mtime > header_ifrange,
+         *   send_r_partial_content
+         * else
+         *   reset-ranges, etc...
+         */
+        if (!req->header_ifrange) {
+            send_r_partial_content(req);
+        } else {
+            /* either no if-range or the if-range does not match */
+            reset_ranges(req);
+            req->ranges = range_pool_pop();
+            req->ranges->start = 0;
+            req->ranges->stop = req->filesize - 1;
+            send_r_request_ok(req);
+        }
+        req->filepos = req->ranges->start;
     }
 
-    /* NOTE: I (Jon Nelson) tried performing a read(2)
-     * into the output buffer provided the file data would
-     * fit, before mmapping, and if successful, writing that
-     * and stopping there -- all to avoid the cost
-     * of a mmap.  Oddly, it was *slower* in benchmarks.
-     */
-    req->mmap_entry_var = find_mmap(data_fd, &statbuf);
-    if (req->mmap_entry_var == NULL) {
-        req->buffer_end = 0;
-        if (errno == ENOENT)
-            send_r_not_found(req);
-        else if (errno == EACCES)
-            send_r_forbidden(req);
-        else
-            send_r_bad_request(req);
-        close(data_fd);
-        return 0;
-    }
-    req->data_mem = req->mmap_entry_var->mmap;
-    close(data_fd);             /* close data file */
-
-    if ((long) req->data_mem == -1) {
-        boa_perror(req, "mmap");
-        return 0;
+    if (req->method == M_HEAD) {
+        return complete_response(req);
     }
 
-    send_r_request_ok(req);     /* All's well */
+    bytes_free = 0;
+    if (req->data_mem) {
+        /* things can really go tilt if req->buffer_end > BUFFER_SIZE,
+         * but basically that can't happen
+         */
 
-    bytes = BUFFER_SIZE - req->buffer_end;
+        /* We lose statbuf here, so make sure response has been sent */
+        bytes_free = BUFFER_SIZE - req->buffer_end;
+        /* 256 bytes for the **trailing** headers */
 
-    /* bytes is now how much the buffer can hold
-     * after the headers
-     */
+        /* bytes is now how much the buffer can hold
+         * after the headers
+         */
+    }
 
-    if (bytes > 0) {
-        if (bytes > req->filesize)
-            bytes = req->filesize;
+    if (req->data_mem && bytes_free > 256) {
+        unsigned int want;
+        Range *r;
 
-        if (sigsetjmp(env, 1) == 0) {
+        r = req->ranges;
+
+        want = (r->stop - r->start) + 1;
+
+        if (bytes_free > want)
+            bytes_free = want;
+        else {
+            /* bytes_free <= want */
+            ;
+        }
+
+        if (setjmp(env) == 0) {
             handle_sigbus = 1;
-            memcpy(req->buffer + req->buffer_end, req->data_mem, bytes);
+            memcpy(req->buffer + req->buffer_end,
+                   req->data_mem + r->start, bytes_free);
             handle_sigbus = 0;
             /* OK, SIGBUS **after** this point is very bad! */
         } else {
@@ -208,14 +357,17 @@ int init_get(request * req)
             log_error_doc(req);
             reset_output_buffer(req);
             send_r_error(req);
-            fprintf(stderr, "%sGot SIGBUS in memcpy!\n", get_commonlog_time());
+            fprintf(stderr, "%sGot SIGBUS in memcpy!\n",
+                    get_commonlog_time());
             return 0;
         }
-        req->buffer_end += bytes;
-        req->filepos += bytes;
-        if (req->filesize == req->filepos) {
-            req_flush(req);
-            req->status = DONE;
+        req->buffer_end += bytes_free;
+        req->filepos += bytes_free;
+        req->bytes_written += bytes_free;
+        r->start += bytes_free;
+        if (bytes_free == want) {
+            /* this will fit due to the 256 extra bytes_free */
+            return complete_response(req);
         }
     }
 
@@ -236,16 +388,20 @@ int init_get(request * req)
 int process_get(request * req)
 {
     int bytes_written;
-    volatile int bytes_to_write;
+    volatile unsigned int bytes_to_write;
 
-    bytes_to_write = req->filesize - req->filepos;
-    if (bytes_to_write > SOCKETBUF_SIZE)
-        bytes_to_write = SOCKETBUF_SIZE;
+    if (req->method == M_HEAD) {
+        return complete_response(req);
+    }
 
+    bytes_to_write = (req->ranges->stop - req->ranges->start) + 1;
 
-    if (sigsetjmp(env, 1) == 0) {
+    if (bytes_to_write > system_bufsize)
+        bytes_to_write = system_bufsize;
+
+    if (setjmp(env) == 0) {
         handle_sigbus = 1;
-        bytes_written = write(req->fd, req->data_mem + req->filepos,
+        bytes_written = write(req->fd, req->data_mem + req->ranges->start,
                               bytes_to_write);
         handle_sigbus = 0;
         /* OK, SIGBUS **after** this point is very bad! */
@@ -261,7 +417,8 @@ int process_get(request * req)
          * won't be the wiser.
          */
         req->status = DEAD;
-        fprintf(stderr, "%sGot SIGBUS in write(2)!\n", get_commonlog_time());
+        fprintf(stderr, "%sGot SIGBUS in write(2)!\n",
+                get_commonlog_time());
         return 0;
     }
 
@@ -280,12 +437,16 @@ int process_get(request * req)
             return 0;
         }
     }
-    req->filepos += bytes_written;
 
-    if (req->filepos == req->filesize) { /* EOF */
-        return 0;
-    } else
-        return 1;               /* more to do */
+    req->filepos += bytes_written;
+    req->bytes_written += bytes_written;
+    req->ranges->start += bytes_written;
+
+    if ((req->ranges->stop + 1 - req->ranges->start) == 0) {
+        return complete_response(req);
+    }
+
+    return 1;               /* more to do */
 }
 
 /*
@@ -307,16 +468,33 @@ int get_dir(request * req, struct stat *statbuf)
     int data_fd;
 
     if (directory_index) {      /* look for index.html first?? */
-        strcpy(pathname_with_index, req->pathname);
-        strcat(pathname_with_index, directory_index);
-        /*
-           sprintf(pathname_with_index, "%s%s", req->pathname, directory_index);
-         */
+        unsigned int l1, l2;
+
+        l1 = strlen(req->pathname);
+        l2 = strlen(directory_index);
+#ifdef GUNZIP
+        if (l1 + l2 + 1 + 3 > sizeof(pathname_with_index)) { /* for .gz */
+#else
+        if (l1 + l2 + 1 > sizeof(pathname_with_index)) {
+#endif
+
+            errno = ENOMEM;
+            boa_perror(req, "pathname_with_index not large enough for pathname + index");
+            return -1;
+        }
+        memcpy(pathname_with_index, req->pathname, l1); /* doesn't copy NUL */
+        memcpy(pathname_with_index + l1, directory_index, l2 + 1); /* does */
 
         data_fd = open(pathname_with_index, O_RDONLY);
 
         if (data_fd != -1) {    /* user's index file */
-            strcpy(req->request_uri, directory_index); /* for mimetype */
+            if (l2 + 1 > sizeof(req->request_uri)) {
+                errno = ENOMEM;
+                boa_perror(req, "pathname_with_index not large enough for pathname + index");
+                close(data_fd);
+                return -1;
+            }
+            memcpy(req->request_uri, directory_index, l2 + 1); /* for mimetype */
             fstat(data_fd, statbuf);
             return data_fd;
         }
@@ -328,7 +506,6 @@ int get_dir(request * req, struct stat *statbuf)
             send_r_not_found(req);
             return -1;
         }
-
 #ifdef GUNZIP
         /* if we are here, trying index.html didn't work
          * try index.html.gz
@@ -349,8 +526,9 @@ int get_dir(request * req, struct stat *statbuf)
                 send_r_error(req);
                 return 0;
             }
-            if (!req->simple) {
-                req_write(req, "HTTP/1.0 200 OK-GUNZIP\r\n");
+            if (req->http_version != HTTP09) {
+                req_write(req, http_ver_string(req->http_version));
+                req_write(req, " 200 OK-GUNZIP\r\n");
                 print_http_headers(req);
                 print_last_modified(req);
                 req_write(req, "Content-Type: ");
@@ -371,8 +549,9 @@ int get_dir(request * req, struct stat *statbuf)
         SQUASH_KA(req);
 
         /* the indexer should take care of all headers */
-        if (!req->simple) {
-            req_write(req, "HTTP/1.0 200 OK\r\n");
+        if (req->http_version != HTTP09) {
+            req_write(req, http_ver_string(req->http_version));
+            req_write(req, " 200 OK\r\n");
             print_http_headers(req);
             print_last_modified(req);
             req_write(req, "Content-Type: text/html\r\n\r\n");
@@ -399,8 +578,12 @@ int get_cachedir_file(request * req, struct stat *statbuf)
     time_t real_dir_mtime;
 
     real_dir_mtime = statbuf->st_mtime;
-    sprintf(pathname_with_index, "%s/dir.%d.%ld",
-            cachedir, (int) statbuf->st_dev, statbuf->st_ino);
+    /* the sizeof() doesn't need a -1 because snprintf will
+     * include the NUL when calculating if the size is enough
+     */
+    snprintf(pathname_with_index, sizeof(pathname_with_index),
+             "%s/dir.%d.%ld", cachedir,
+             (int) statbuf->st_dev, statbuf->st_ino);
     data_fd = open(pathname_with_index, O_RDONLY);
 
     if (data_fd != -1) {        /* index cache */

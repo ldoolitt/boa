@@ -20,10 +20,12 @@
  *
  */
 
-/* $Id: hash.c,v 1.14.4.4 2002/07/30 03:59:26 jnelson Exp $*/
+/* $Id: hash.c,v 1.14.4.10 2003/01/14 05:27:49 jnelson Exp $*/
 
 #include "boa.h"
-#include "parse.h"
+
+#define DEBUG if
+#define DEBUG_HASH 0
 
 /*
  * There are two hash tables used, each with a key/value pair
@@ -49,31 +51,38 @@ typedef struct _hash_struct_ hash_struct;
 
 static hash_struct *mime_hashtable[MIME_HASHTABLE_SIZE];
 static hash_struct *passwd_hashtable[PASSWD_HASHTABLE_SIZE];
+void add_mime_type(const char *extension, const char *type);
+static unsigned get_homedir_hash_value(const char *name);
 
 #ifdef WANT_ICKY_HASH
-static unsigned four_char_hash(char *buf);
+static unsigned four_char_hash(const char *buf);
 #define boa_hash four_char_hash
 #else
 #ifdef WANT_SDBM_HASH
-static unsigned sdbm_hash(char *str);
+static unsigned sdbm_hash(const char *str);
 #define boa_hash sdbm_hash
 #else
-static unsigned djb2_hash(char *str);
+#ifdef WANT_DJB2_HASH
+static unsigned djb2_hash(const char *str);
 #define boa_hash djb2_hash
+#else
+static unsigned fnv1a_hash(const char *str);
+#define boa_hash fnv1a_hash
+#endif
 #endif
 #endif
 
 #ifdef WANT_ICKY_HASH
-static unsigned four_char_hash(char *buf)
+static unsigned four_char_hash(const char *buf)
 {
     unsigned int hash = (buf[0] +
-                     (buf[1] ? buf[1] : 241 +
-                     (buf[2] ? buf[2] : 251 +
-                      (buf[3] ? buf[3] : 257))));
-#ifdef DEBUG_HASH
-    log_error_time();
-    fprintf(stderr, "four_char_hash(%s) = %u\n", buf, hash);
-#endif
+                         (buf[1] ? buf[1] : 241 +
+                          (buf[2] ? buf[2] : 251 +
+                           (buf[3] ? buf[3] : 257))));
+    DEBUG(DEBUG_HASH) {
+        log_error_time();
+        fprintf(stderr, "four_char_hash(%s) = %u\n", buf, hash);
+    }
     return hash;
 }
 
@@ -87,93 +96,183 @@ static unsigned four_char_hash(char *buf)
 #else
 #define MAX_HASH_LENGTH 4
 #ifdef WANT_SDBM_HASH
-static unsigned sdbm_hash(char *str)
+static unsigned sdbm_hash(const char *str)
 {
     unsigned hash = 0;
     int c;
     short count = MAX_HASH_LENGTH;
 
-#ifdef DEBUG_HASH
-    log_error_time();
-    fprintf(stderr, "sdbm_hash(%s) = ", str);
-#endif
+    DEBUG(DEBUG_HASH) {
+        log_error_time();
+        fprintf(stderr, "sdbm_hash(%s) = ", str);
+    }
 
     while ((c = *str++) && count--)
         hash = c + (hash << 6) + (hash << 16) - hash;
 
-#ifdef DEBUG_HASH
-    fprintf(stderr, "%u\n", hash);
-#endif
+    DEBUG(DEBUG_HASH) {
+        fprintf(stderr, "%u\n", hash);
+    }
     return hash;
 }
 #else
-
-static unsigned djb2_hash(char *str)
+#ifdef WANT_DJB2_HASH
+static unsigned djb2_hash(const char *str)
 {
     unsigned hash = 5381;
     int c;
     short count = MAX_HASH_LENGTH;
 
-#ifdef DEBUG_HASH
-    log_error_time();
-    fprintf(stderr, "djb2_hash(%s) = ", str);
-#endif
+    DEBUG(DEBUG_HASH) {
+        log_error_time();
+        fprintf(stderr, "djb2_hash(%s) = ", str);
+    }
 
     while ((c = *(str++)) && count--)
         hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
 
-#ifdef DEBUG_HASH
-    fprintf(stderr, "%u\n", hash);
-#endif
+    DEBUG(DEBUG_HASH) {
+        fprintf(stderr, "%u\n", hash);
+    }
     return hash;
 }
+#else
+/*
+ * magic 32 bit FNV1a hash constants
+ *
+ * See: http://www.isthe.com/chongo/tech/comp/fnv/index.html
+ */
+#define OFFSET_BASIS 2166136261U
+#define FNV_PRIME 16777619U
+/*
+ *
+ * hash.c:152: warning: width of integer constant may change on other systems with -traditional
+ */
+
+static unsigned fnv1a_hash(const char *str)
+{
+    unsigned int hash = OFFSET_BASIS;
+    short count = MAX_HASH_LENGTH;
+
+    /*
+     * compute FNV1a hash of the first file component
+     */
+    do {
+        hash ^= *str++;
+        hash *= FNV_PRIME;
+    } while (*str != '\0' && count--);
+
+    return hash;
+}
+
+#endif
 #endif
 #endif
 
 /*
- * Name: add_mime_type
- * Description: Adds a key/value pair to the mime_hashtable
+ * Name: hash_insert
+ * Description: Adds a key/value pair to the provided hashtable
  */
 
-void add_mime_type(char *extension, char *type)
+static
+hash_struct *hash_insert(hash_struct * table[], const unsigned int hash,
+                         const char *key, const char *value)
 {
-    unsigned int hash;
-    hash_struct *current, *next;
+    hash_struct *current, *trailer;
 
-    if (!extension)
-        return;
+    if (!key) {
+        log_error_time();
+        fprintf(stderr, "Yipes! Null value sent as key to hash_insert!\n");
+        return NULL;
+    }
 
-    hash = get_mime_hash_value(extension);
+    /* should we bother to check table, hash, and key for NULL/0 ? */
 
-    current = mime_hashtable[hash];
+    DEBUG(DEBUG_HASH)
+        fprintf(stderr,
+                "Adding key \"%s\" for value \"%s\" (hash=%d)\n",
+                key, value, hash);
 
+    current = table[hash];
     while (current) {
-        if (!strcmp(current->key, extension))
-            return;         /* don't add extension twice */
+        if (!strcmp(current->key, key))
+            return current;     /* don't add extension twice */
         if (current->next)
             current = current->next;
         else
             break;
     }
 
-    /* if here, we need to add a new one */
-    next = (hash_struct *) malloc(sizeof (hash_struct));
-    if (!next) {
-        DIE("malloc of hash_struct failed!");
+    /* not found */
+    trailer = (hash_struct *) malloc(sizeof (hash_struct));
+    if (trailer == NULL) {
+        WARN("unable to allocate memory for hash_insert");
+        return NULL;
     }
-    next->key = strdup(extension);
-    if (!next->key)
-        DIE("malloc of hash_struct->key failed!");
-    next->value = strdup(type);
-    if (!next->value)
-        DIE("malloc of hash_struct->value failed!");
-    next->next = NULL;
 
-    if (!current) {
-        mime_hashtable[hash] = next;
-    } else {
-        current->next = next;
+    trailer->key = strdup(key);
+    trailer->value = strdup(value);
+    trailer->next = NULL;
+
+    if (trailer->key == NULL || trailer->value == NULL) {
+        int errno_save = errno;
+
+        free(trailer);
+        if (trailer->key)
+            free(trailer->key);
+        if (trailer->value)
+            free(trailer->value);
+        errno = errno_save;
+        WARN("allocated key or value is NULL");
+        return NULL;
     }
+
+    /* successfully allocated and built new hash structure */
+    if (!current) {
+        /* no entries for this hash value */
+        table[hash] = trailer;
+    } else {
+        current->next = trailer;
+    }
+
+    return trailer;
+}
+
+static
+hash_struct *find_in_hash(hash_struct * table[], const char *key,
+                          const unsigned int hash)
+{
+    hash_struct *current;
+
+    current = table[hash];
+
+    while (current) {
+        if (!strcmp(current->key, key)) /* hit */
+            return current;
+        current = current->next;
+    }
+
+    return NULL;
+}
+
+/*
+ * Name: add_mime_type
+ * Description: Adds a key/value pair to the mime_hashtable
+ */
+
+void add_mime_type(const char *extension, const char *type)
+{
+    unsigned int hash;
+
+    if (!extension || extension[0] == '\0') {
+        log_error_time();
+        fprintf(stderr,
+                "Yipes! Null value sent as key to add_mime_type!\n");
+        return;
+    }
+
+    hash = get_mime_hash_value(extension);
+    hash_insert(mime_hashtable, hash, extension, type);
 }
 
 /*
@@ -183,21 +282,17 @@ void add_mime_type(char *extension, char *type)
  * and mods by the hashtable size to get the hash value
  */
 
-unsigned get_mime_hash_value(char *extension)
+unsigned get_mime_hash_value(const char *extension)
 {
-    unsigned int hash = 0;
-
     if (extension == NULL || extension[0] == '\0') {
         /* FIXME */
         log_error_time();
-        fprintf(stderr, "Attempt to hash NULL or empty string!\n");
+        fprintf(stderr,
+                "Attempt to hash NULL or empty string! [get_mime_hash_value]!\n");
         return 0;
     }
 
-    hash = boa_hash(extension);
-    hash %= MIME_HASHTABLE_SIZE;
-
-    return hash;
+    return boa_hash(extension) % MIME_HASHTABLE_SIZE;
 }
 
 /*
@@ -207,7 +302,7 @@ unsigned get_mime_hash_value(char *extension)
  * Returns default type if not found.
  */
 
-char *get_mime_type(char *filename)
+char *get_mime_type(const char *filename)
 {
     char *extension;
     hash_struct *current;
@@ -216,19 +311,20 @@ char *get_mime_type(char *filename)
 
     extension = strrchr(filename, '.');
 
-    if (!extension || *extension++ == '\0')
+    /* remember, extension points to the *last* '.' in the filename,
+     * which may be NULL or look like:
+     *  foo.bar
+     *  foo. (in which case extension[1] == '\0')
+     */
+    if (!extension || extension[1] == '\0')
         return default_type;
 
+    /* make sure we hash on the 'bar' not the '.bar' */
+    ++extension;
+
     hash = get_mime_hash_value(extension);
-    current = mime_hashtable[hash];
-
-    while (current) {
-        if (!strcmp(current->key, extension)) /* hit */
-            return current->value;
-        current = current->next;
-    }
-
-    return default_type;
+    current = find_in_hash(mime_hashtable, extension, hash);
+    return (current ? current->value : default_type);
 }
 
 /*
@@ -238,19 +334,19 @@ char *get_mime_type(char *filename)
  * and mods by the hashtable size to get the hash value
  */
 
-unsigned get_homedir_hash_value(char *name)
+static unsigned get_homedir_hash_value(const char *name)
 {
     unsigned int hash = 0;
 
     if (name == NULL || name[0] == '\0') {
         /* FIXME */
         log_error_time();
-        fprintf(stderr, "Attempt to hash NULL or empty string!\n");
+        fprintf(stderr,
+                "Attempt to hash NULL or empty string! [get_homedir_hash_value]\n");
         return 0;
     }
 
-    hash = boa_hash(name);
-    hash %= PASSWD_HASHTABLE_SIZE;
+    hash = boa_hash(name) % PASSWD_HASHTABLE_SIZE;
 
     return hash;
 }
@@ -264,99 +360,61 @@ unsigned get_homedir_hash_value(char *name)
  *
  */
 
-char *get_home_dir(char *name)
+char *get_home_dir(const char *name)
 {
-    struct passwd *passwdbuf;
+    hash_struct *current;
 
-    hash_struct *current, *next;
     unsigned int hash;
-
-    /* first check hash table -- if username is less than four characters,
-       just hash to zero (this should be very rare) */
 
     hash = get_homedir_hash_value(name);
 
-    for(current = passwd_hashtable[hash];current;current = current->next) {
-        if (!strcmp(current->key, name)) /* hit */
-            return current->value;
-        if (!current->next)
-            break;
-    }
-
-    /* if here, we have to add a new one */
-
-    passwdbuf = getpwnam(name);
-
-    if (!passwdbuf)         /* does not exist */
-        return NULL;
-
-    next = (hash_struct *) malloc(sizeof (hash_struct));
-    if (!next) {
-        WARN("malloc of hash_struct for passwd_hashtable failed!");
-        return NULL;
-    }
-
-    next->key = strdup(name);
-    if (!next->key) {
-        WARN("malloc of passwd_hashtable[hash]->key failed!");
-        free(next);
-        return NULL;
-    }
-    next->value = strdup(passwdbuf->pw_dir);
-    if (!next->value) {
-        WARN("malloc of passwd_hashtable[hash]->value failed!");
-        free(next->key);
-        free(next);
-        return NULL;
-    }
-    next->next = NULL;
+    current = find_in_hash(passwd_hashtable, name, hash);
 
     if (!current) {
-        passwd_hashtable[hash] = next;
-    } else {
-        current->next = next;
+        /* not found */
+        struct passwd *passwdbuf;
+
+        passwdbuf = getpwnam(name);
+
+        if (!passwdbuf)         /* does not exist */
+            return NULL;
+
+        current =
+            hash_insert(passwd_hashtable, hash, name, passwdbuf->pw_dir);
     }
-    return next->value;
+
+    return (current ? current->value : NULL);
+}
+
+static
+void clear_hashtable(hash_struct * table[], int size)
+{
+    int i;
+    hash_struct *temp;
+    for (i = 0; i < size; ++i) { /* these limits OK? */
+        temp = table[i];
+        while (temp) {
+            hash_struct *temp_next;
+
+            temp_next = temp->next;
+            free(temp->key);
+            free(temp->value);
+            free(temp);
+
+            temp = temp_next;
+        }
+        table[i] = NULL;
+    }
 }
 
 void dump_mime(void)
 {
-    int i;
-    hash_struct *temp;
-    for (i = 0; i < MIME_HASHTABLE_SIZE; ++i) { /* these limits OK? */
-        temp = mime_hashtable[i];
-        while (temp) {
-            hash_struct *temp_next;
-
-            temp_next = temp->next;
-            free(temp->key);
-            free(temp->value);
-            free(temp);
-
-            temp = temp_next;
-        }
-        mime_hashtable[i] = NULL;
-    }
+    clear_hashtable(mime_hashtable, MIME_HASHTABLE_SIZE);
 }
 
 void dump_passwd(void)
 {
-    int i;
-    hash_struct *temp;
-    for (i = 0; i < PASSWD_HASHTABLE_SIZE; ++i) { /* these limits OK? */
-        temp = passwd_hashtable[i];
-        while (temp) {
-            hash_struct *temp_next;
-
-            temp_next = temp->next;
-            free(temp->key);
-            free(temp->value);
-            free(temp);
-
-            temp = temp_next;
-        }
-        passwd_hashtable[i] = NULL;
-    }
+    clear_hashtable(passwd_hashtable, PASSWD_HASHTABLE_SIZE);
 }
 
 void show_hash_stats(void)
@@ -383,8 +441,7 @@ void show_hash_stats(void)
         }
     }
     log_error_time();
-    fprintf(stderr, "mime_hashtable has %d total entries\n",
-            total);
+    fprintf(stderr, "mime_hashtable has %d total entries\n", total);
 
     total = 0;
     for (i = 0; i < PASSWD_HASHTABLE_SIZE; ++i) { /* these limits OK? */
@@ -405,7 +462,6 @@ void show_hash_stats(void)
     }
 
     log_error_time();
-    fprintf(stderr, "passwd_hashtable has %d total entries\n",
-            total);
+    fprintf(stderr, "passwd_hashtable has %d total entries\n", total);
 
 }

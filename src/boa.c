@@ -21,10 +21,9 @@
  *
  */
 
-/* $Id: boa.c,v 1.99.2.2 2002/07/23 15:50:29 jnelson Exp $*/
+/* $Id: boa.c,v 1.99.2.17 2003/02/02 05:02:19 jnelson Exp $*/
 
 #include "boa.h"
-#include <sys/resource.h>
 
 /* globals */
 int backlog = SO_MAXCONN;
@@ -35,8 +34,9 @@ int sigchld_flag = 0;           /* 1 => signal has happened, needs attention */
 int sigalrm_flag = 0;           /* 1 => signal has happened, needs attention */
 int sigterm_flag = 0;           /* lame duck mode */
 time_t current_time;
-int max_fd = 0;
 int pending_requests = 0;
+
+extern const char *config_file_name;
 
 /* static to boa.c */
 static void fixup_server_root(void);
@@ -45,39 +45,40 @@ static void drop_privs(void);
 
 static int sock_opt = 1;
 static int do_fork = 1;
-int devnullfd = -1;
 
 int main(int argc, char **argv)
 {
     int c;                      /* command line arg */
-    int server_s;                   /* boa socket */
+    int server_s;               /* boa socket */
+    pid_t pid;
 
     /* set umask to u+rw, u-x, go-rwx */
-    c = umask(~0600);
+    c = umask(077);
     if (c == -1) {
         perror("umask");
         exit(1);
     }
 
-    devnullfd = open("/dev/null", 0);
+    {
+        int devnullfd = -1;
+        devnullfd = open("/dev/null", 0);
 
-    /* make STDIN and STDOUT point to /dev/null */
-    if (devnullfd == -1) {
-        DIE("can't open /dev/null");
-    }
+        /* make STDIN point to /dev/null */
+        if (devnullfd == -1) {
+            DIE("can't open /dev/null");
+        }
 
-    if (dup2(devnullfd, STDIN_FILENO) == -1) {
-        DIE("can't dup2 /dev/null to STDIN_FILENO");
-    }
+        if (dup2(devnullfd, STDIN_FILENO) == -1) {
+            DIE("can't dup2 /dev/null to STDIN_FILENO");
+        }
 
-    if (dup2(devnullfd, STDOUT_FILENO) == -1) {
-        DIE("can't dup2 /dev/null to STDOUT_FILENO");
+        close(devnullfd);
     }
 
     /* but first, update timestamp, because log_error_time uses it */
     (void) time(&current_time);
 
-    while ((c = getopt(argc, argv, "c:r:d")) != -1) {
+    while ((c = getopt(argc, argv, "c:df:r:")) != -1) {
         switch (c) {
         case 'c':
             if (server_root)
@@ -87,6 +88,12 @@ int main(int argc, char **argv)
                 perror("strdup (for server_root)");
                 exit(1);
             }
+            break;
+        case 'd':
+            do_fork = 0;
+            break;
+        case 'f':
+            config_file_name = optarg;
             break;
         case 'r':
             if (chdir(optarg) == -1) {
@@ -105,11 +112,9 @@ int main(int argc, char **argv)
                 exit(1);
             }
             break;
-        case 'd':
-            do_fork = 0;
-            break;
         default:
-            fprintf(stderr, "Usage: %s [-c serverroot] [-r chroot] [-d]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [-c serverroot] [-d] [-f configfile] [-r chroot]\n",
+                    argv[0]);
             exit(1);
         }
     }
@@ -119,40 +124,43 @@ int main(int argc, char **argv)
     open_logs();
     server_s = create_server_socket();
     init_signals();
-    drop_privs();
     create_common_env();
     build_needs_escape();
 
-    if (max_connections < 1) {
-        struct rlimit rl;
-
-        /* has not been set explicitly */
-        c = getrlimit(RLIMIT_NOFILE, &rl);
-        if (c < 0) {
-            perror("getrlimit");
-            exit(1);
-        }
-        max_connections = rl.rlim_cur;
-    }
-
     /* background ourself */
     if (do_fork) {
-        switch(fork()) {
-        case -1:
-            /* error */
-            perror("fork");
-            exit(1);
-            break;
-        case 0:
-            /* child, success */
-            break;
-        default:
-            /* parent, success */
-            exit(0);
-            break;
-        }
+        pid = fork();
+    } else {
+        pid = getpid();
     }
 
+    switch (pid) {
+    case -1:
+        /* error */
+        perror("fork/getpid");
+        exit(1);
+        break;
+    case 0:
+        /* child, success */
+        break;
+    default:
+        /* parent, success */
+        if (pid_file != NULL) {
+            FILE *PID_FILE = fopen(pid_file, "w");
+            if (PID_FILE != NULL) {
+                fprintf(PID_FILE, "%d", pid);
+                fclose(PID_FILE);
+            } else {
+                perror("fopen pid file");
+            }
+        }
+
+        if (do_fork)
+            exit(0);
+        break;
+    }
+
+    drop_privs();
     /* main loop */
     timestamp();
 
@@ -160,7 +168,7 @@ int main(int argc, char **argv)
     status.errors = 0;
 
     start_time = current_time;
-    select_loop(server_s);
+    loop(server_s);
     return 0;
 }
 
@@ -168,7 +176,7 @@ static int create_server_socket(void)
 {
     int server_s;
 
-    server_s = socket(SERVER_AF, SOCK_STREAM, IPPROTO_TCP);
+    server_s = socket(SERVER_PF, SOCK_STREAM, IPPROTO_TCP);
     if (server_s == -1) {
         DIE("unable to create socket");
     }
@@ -189,8 +197,8 @@ static int create_server_socket(void)
         DIE("setsockopt");
     }
 
-    /* internet family-specific code encapsulated in bind_server()  */
-    if (bind_server(server_s, server_ip) == -1) {
+    /* Internet family-specific code encapsulated in bind_server()  */
+    if (bind_server(server_s, server_ip, server_port) == -1) {
         DIE("unable to bind");
     }
 
@@ -222,7 +230,7 @@ static void drop_privs(void)
         /* test for failed-but-return-was-successful setuid
          * http://www.securityportal.com/list-archive/bugtraq/2000/Jun/0101.html
          */
-        if (setuid(0) != -1) {
+        if (server_uid != 0 && setuid(0) != -1) {
             DIE("icky Linux kernel bug!");
         }
     } else {
@@ -246,8 +254,6 @@ static void drop_privs(void)
 
 static void fixup_server_root()
 {
-    char *dirbuf;
-
     if (!server_root) {
 #ifdef SERVER_ROOT
         server_root = strdup(SERVER_ROOT);
@@ -269,9 +275,4 @@ static void fixup_server_root()
                 server_root);
         exit(1);
     }
-
-    dirbuf = normalize_path(server_root);
-    free(server_root);
-    server_root = dirbuf;
 }
-

@@ -19,7 +19,7 @@
  *
  */
 
-/* $Id: buffer.c,v 1.10.2.2 2002/07/26 03:03:44 jnelson Exp $ */
+/* $Id: buffer.c,v 1.10.2.4 2003/01/14 05:27:49 jnelson Exp $ */
 
 #include "boa.h"
 #include "escape.h"
@@ -34,9 +34,9 @@
  * Returns: -1 for error, otherwise how much is stored
  */
 
-int req_write(request * req, char *msg)
+int req_write(request * req, const char *msg)
 {
-    int msg_len;
+    unsigned int msg_len;
 
     msg_len = strlen(msg);
 
@@ -54,7 +54,7 @@ int req_write(request * req, char *msg)
     return req->buffer_end;
 }
 
-void reset_output_buffer(request *req)
+void reset_output_buffer(request * req)
 {
     req->buffer_end = 0;
 }
@@ -66,9 +66,11 @@ void reset_output_buffer(request *req)
  *  encoded for URLs in HTTP headers.
  * Returns: -1 for error, otherwise how much is stored
  */
-int req_write_escape_http(request * req, char *msg)
+int req_write_escape_http(request * req, const char *msg)
 {
-    char c, *inp, *dest;
+    char c, *dest;
+    const char *inp;
+
     int left;
     inp = msg;
     dest = req->buffer + req->buffer_end;
@@ -103,10 +105,12 @@ int req_write_escape_http(request * req, char *msg)
  *  encoded for HTML bodies.
  * Returns: -1 for error, otherwise how much is stored
  */
-int req_write_escape_html(request * req, char *msg)
+int req_write_escape_html(request * req, const char *msg)
 {
-    char c, *inp, *dest;
+    char c, *dest;
+    const char *inp;
     int left;
+
     inp = msg;
     dest = req->buffer + req->buffer_end;
     /* 5 is a guard band, since we don't check the destination pointer
@@ -171,7 +175,7 @@ int req_write_escape_html(request * req, char *msg)
 
 int req_flush(request * req)
 {
-    int bytes_to_write;
+    unsigned bytes_to_write;
 
     bytes_to_write = req->buffer_end - req->buffer_start;
     if (req->status == DEAD)
@@ -228,10 +232,10 @@ int req_flush(request * req)
  *  more work than I'm willing to put in right now, though, so here we are.
  */
 
-char *escape_string(char *inp, char *buf)
+char *escape_string(const char *inp, char *buf)
 {
     int max;
-    char *index;
+    char *ix;
     unsigned char c;
 
     max = strlen(inp) * 3;
@@ -245,15 +249,15 @@ char *escape_string(char *inp, char *buf)
         return NULL;
     }
 
-    index = buf;
+    ix = buf;
     while ((c = *inp++) && max > 0) {
         if (needs_escape((unsigned int) c)) {
-            *index++ = '%';
-            *index++ = INT_TO_HEX(c >> 4);
-            *index++ = INT_TO_HEX(c & 15);
+            *ix++ = '%';
+            *ix++ = INT_TO_HEX(c >> 4);
+            *ix++ = INT_TO_HEX(c & 15);
         } else
-            *index++ = c;
+            *ix++ = c;
     }
-    *index = '\0';
+    *ix = '\0';
     return buf;
 }

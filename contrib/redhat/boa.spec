@@ -1,6 +1,6 @@
 Summary: a single-tasking high performance http server
 Name: boa
-Version: 0.94.9
+Version: 0.94.14
 Release: 1
 Group: System Environment/Daemons
 Source: http://www.boa.org/boa-%{version}.tar.gz
@@ -59,10 +59,10 @@ mkdir -p $RPM_BUILD_ROOT/etc/rc.d/init.d
 
 install -m755 src/boa $RPM_BUILD_ROOT/usr/sbin/
 install -m755 src/boa_indexer $RPM_BUILD_ROOT/usr/lib/boa/
-install -m644 redhat/boa.conf $RPM_BUILD_ROOT/etc/boa/
-install -m755 redhat/boa.init $RPM_BUILD_ROOT/etc/rc.d/init.d/boa
+install -m644 contrib/redhat/boa.conf $RPM_BUILD_ROOT/etc/boa/
+install -m755 contrib/redhat/boa.init $RPM_BUILD_ROOT/etc/rc.d/init.d/boa
 mv docs/boa.8.gz $RPM_BUILD_ROOT/usr/man/man8/
-install -m644 redhat/boa.logrotate $RPM_BUILD_ROOT/etc/logrotate.d/boa
+install -m644 contrib/redhat/boa.logrotate $RPM_BUILD_ROOT/etc/logrotate.d/boa
 
 touch $RPM_BUILD_ROOT/var/log/boa/{error,access}_log
 

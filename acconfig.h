@@ -12,4 +12,3 @@
 
 /* if struct tm has tm_zone structure */
 #undef HAVE_TM_ZONE
-

@@ -18,7 +18,7 @@
  *
  */
 
-/* $Id: sublog.c,v 1.6 2002/03/24 22:40:31 jnelson Exp $*/
+/* $Id: sublog.c,v 1.6.2.2 2003/01/04 03:00:40 jnelson Exp $*/
 
 #include <errno.h>
 #include <stdio.h>
@@ -32,6 +32,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include "compat.h"
 
 int open_pipe_fd(char *command);
 int open_net_fd(char *spec);
@@ -76,16 +77,18 @@ int open_net_fd(char *spec)
     *p++ = '\0';
     port = strtol(p, NULL, 10);
     /* printf("Host %s, port %d\n",spec,port); */
-    sa.sin_family = AF_INET;
+    sa.sin_family = PF_INET;
     sa.sin_port = htons(port);
     he = gethostbyname(spec);
     if (!he) {
+#ifdef HAVE_HERROR
         herror("open_net_fd");
+#endif
         return -1;
     }
     memcpy(&sa.sin_addr, he->h_addr, he->h_length);
     /* printf("using ip %s\n",inet_ntoa(sa.sin_addr)); */
-    fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    fd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (fd < 0)
         return fd;
     if (connect(fd, (struct sockaddr *) &sa, sizeof (sa)) < 0)

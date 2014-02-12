@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: util.c,v 1.61.2.3 2002/07/07 23:22:18 jnelson Exp $ */
+/* $Id: util.c,v 1.61.2.9 2003/02/02 05:02:19 jnelson Exp $ */
 
 #include "boa.h"
 
@@ -29,9 +29,10 @@
     (((char1 >= 'A') ? (((char1 & 0xdf) - 'A') + 10) : (char1 - '0')) * 16) + \
     (((char2 >= 'A') ? (((char2 & 0xdf) - 'A') + 10) : (char2 - '0')))
 
+/* Don't need or want the trailing nul for these character arrays */
 const char month_tab[48] =
     "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec ";
-const char day_tab[] = "Sun,Mon,Tue,Wed,Thu,Fri,Sat,";
+const char day_tab[28] = "Sun,Mon,Tue,Wed,Thu,Fri,Sat,";
 
 /*
  * Name: clean_pathname
@@ -80,7 +81,7 @@ void clean_pathname(char *pathname)
  * making 29 characters
  * "[27/Feb/1998:20:20:04 +0000] "
  *
- * Constrast with rfc822 time:
+ * Contrast with rfc822 time:
  * "Sun, 06 Nov 1994 08:49:37 GMT"
  *
  * Altered 10 Jan 2000 by Jon Nelson ala Drew Streib for non UTC logging
@@ -154,7 +155,7 @@ char *get_commonlog_time(void)
  * Note: This function is from wn-v1.07 -- it's clever and fast
  */
 
-int month2int(char *monthname)
+int month2int(const char *monthname)
 {
     switch (*monthname) {
     case 'A':
@@ -197,14 +198,15 @@ int month2int(char *monthname)
  * -1: Error!
  */
 
-int modified_since(time_t * mtime, char *if_modified_since)
+int modified_since(time_t * mtime, const char *if_modified_since)
 {
     struct tm *file_gmt;
-    char *ims_info;
+    const char *ims_info;
     char monthname[10 + 1];
     int day, month, year, hour, minute, second;
     int comp;
 
+    /* skip non-whitespace */
     ims_info = if_modified_since;
     while (*ims_info != ' ' && *ims_info != '\0')
         ++ims_info;
@@ -236,7 +238,7 @@ int modified_since(time_t * mtime, char *if_modified_since)
     month = month2int(monthname);
 
     /* Go through from years to seconds -- if they are ever unequal,
-     we know which one is newer and can return */
+       we know which one is newer and can return */
 
     if ((comp = 1900 + file_gmt->tm_year - year))
         return (comp > 0);
@@ -289,7 +291,7 @@ char *to_upper(char *str)
  *  0: illegal string
  */
 
-int unescape_uri(char *uri, char ** query_string)
+int unescape_uri(char *uri, char **query_string)
 {
     char c, d;
     char *uri_old;
@@ -303,19 +305,18 @@ int unescape_uri(char *uri, char ** query_string)
                 *uri++ = HEX_TO_DECIMAL(c, d);
             else
                 return 0;       /* NULL in chars to be decoded */
-        } else if (c == '?') { /* query string */
+        } else if (c == '?') {  /* query string */
             if (query_string)
                 *query_string = ++uri_old;
             /* stop here */
             *uri = '\0';
-            return(1);
-            break;
-        } else if (c == '#') { /* fragment */
+            return (1);
+        } else if (c == '#') {  /* fragment */
             /* legal part of URL, but we do *not* care.
              * However, we still have to look for the query string */
             if (query_string) {
                 ++uri_old;
-                while((c = *uri_old)) {
+                while ((c = *uri_old)) {
                     if (c == '?') {
                         *query_string = ++uri_old;
                         break;
@@ -396,19 +397,19 @@ char *simple_itoa(unsigned int i)
      */
     static char local[22];
     char *p = &local[21];
-    *p-- = '\0';
+    *p = '\0';
     do {
-        *p-- = '0' + i % 10;
+        *--p = '0' + i % 10;
         i /= 10;
-    } while (i > 0);
-    return p + 1;
+    } while (i != 0);
+    return p;
 }
 
 /* I don't "do" negative conversions
  * Therefore, -1 indicates error
  */
 
-int boa_atoi(char *s)
+int boa_atoi(const char *s)
 {
     int retval;
     char *reconv;
@@ -420,20 +421,19 @@ int boa_atoi(char *s)
     if (retval < 0)
         return -1;
 
-    reconv = simple_itoa(retval);
-    if (memcmp(s,reconv,strlen(s)) != 0) {
+    reconv = simple_itoa((unsigned) retval);
+    if (memcmp(s, reconv, strlen(s)) != 0) {
         return -1;
     }
     return retval;
 }
 
-int create_temporary_file(short want_unlink, char *storage, int size)
+int create_temporary_file(short want_unlink, char *storage, unsigned int size)
 {
     static char boa_tempfile[MAX_PATH_LENGTH + 1];
     int fd;
 
-    snprintf(boa_tempfile, MAX_PATH_LENGTH,
-             "%s/boa-temp.XXXXXX", tempdir);
+    snprintf(boa_tempfile, MAX_PATH_LENGTH, "%s/boa-temp.XXXXXX", tempdir);
 
     /* open temp file */
     fd = mkstemp(boa_tempfile);
@@ -444,7 +444,7 @@ int create_temporary_file(short want_unlink, char *storage, int size)
     }
 
     if (storage != NULL) {
-        int len = strlen(boa_tempfile);
+        unsigned int len = strlen(boa_tempfile);
 
         if (len < size) {
             memcpy(storage, boa_tempfile, len + 1);
@@ -469,65 +469,6 @@ int create_temporary_file(short want_unlink, char *storage, int size)
     return (fd);
 }
 
-/*
- * Name: normalize_path
- *
- * Description: Makes sure relative paths are made absolute
- *
- */
-
-#define DIRBUF_SIZE MAX_PATH_LENGTH * 2 + 1
-char * normalize_path(char *path)
-{
-    char dirbuf[DIRBUF_SIZE];
-    int len1, len2;
-    char *endpath;
-
-    if (path[0] == '/') {
-        endpath = strdup(path);
-    } else {
-
-#ifndef HAVE_GETCWD
-        perror("boa: getcwd() not defined. Aborting.");
-        exit(1);
-#endif
-        if (getcwd(dirbuf, DIRBUF_SIZE) == NULL) {
-            if (errno == ERANGE)
-                perror
-                    ("boa: getcwd() failed - unable to get working directory. "
-                     "Aborting.");
-            else if (errno == EACCES)
-                perror("boa: getcwd() failed - No read access in current "
-                       "directory. Aborting.");
-            else
-                perror("boa: getcwd() failed - unknown error. Aborting.");
-            exit(1);
-        }
-
-        /* OK, now the hard part. */
-        len1 = strlen(dirbuf);
-        len2 = strlen(path);
-        if (len1 + len2 > MAX_PATH_LENGTH * 2) {
-            perror("boa: eek. unable to normalize pathname");
-            exit(1);
-        }
-        if (strcmp(path,".") != 0) {
-            memcpy(dirbuf + len1, "/", 1);
-            memcpy(dirbuf + len1 + 1, path, len2 + 1);
-        }
-        /* fprintf(stderr, "boa: normalize gets \"%s\"\n", dirbuf); */
-
-        endpath = strdup(dirbuf);
-    }
-
-    if (endpath == NULL) {
-        fprintf(stderr,
-                "boa: Cannot strdup path. Aborting.\n");
-        exit(1);
-    }
-    return endpath;
-}
-
 int real_set_block_fd(int fd)
 {
     int flags;
@@ -536,7 +477,7 @@ int real_set_block_fd(int fd)
     if (flags == -1)
         return -1;
 
-    flags &= ~O_NONBLOCK;
+    flags &= ~NOBLOCK;
     flags = fcntl(fd, F_SETFL, flags);
     return flags;
 }
@@ -549,7 +490,92 @@ int real_set_nonblock_fd(int fd)
     if (flags == -1)
         return -1;
 
-    flags |= O_NONBLOCK;
+    flags |= NOBLOCK;
     flags = fcntl(fd, F_SETFL, flags);
     return flags;
+}
+
+/* Quoting from rfc1034:
+
+<domain> ::= <subdomain> | " "
+
+<subdomain> ::= <label> | <subdomain> "." <label>
+
+<label> ::= <letter> [ [ <ldh-str> ] <let-dig> ]
+
+<ldh-str> ::= <let-dig-hyp> | <let-dig-hyp> <ldh-str>
+
+<let-dig-hyp> ::= <let-dig> | "-"
+
+<let-dig> ::= <letter> | <digit>
+
+<letter> ::= any one of the 52 alphabetic characters A through Z in
+upper case and a through z in lower case
+
+<digit> ::= any one of the ten digits 0 through 9
+
+and
+
+The labels must follow the rules for ARPANET host names.  They must
+start with a letter, end with a letter or digit, and have as interior
+characters only letters, digits, and hyphen.  There are also some
+restrictions on the length.  Labels must be 63 characters or less.
+
+*/
+
+int check_host(const char *r)
+{
+    /* a hostname can only consist of
+     * chars and numbers, and sep. by only
+     * one period.
+     * It may not end with a period, and must
+     * not start with a number.
+     *
+     * >0: correct
+     * -1: error
+     *  0: not returned
+     *
+     */
+    const char *c;
+    short period_ok = 0;
+    short len = 0;
+
+    c = r;
+    if (c == NULL) {
+        return -1;
+    }
+
+    /* must start with a letter */
+    if (!isalpha(*c))
+        return -1;
+
+    if (strlen(c) > 63)
+        return -1;
+
+    len = 1;
+    while (*(++c) != '\0') {
+        /* interior letters may be alphanumeric, '-', or '.' */
+        /* '.' may not follow '.' */
+        if (isalnum(*c) || *c == '-')
+            period_ok = 1;
+        else if (*c == '.' && period_ok)
+            period_ok = 0;
+        else
+            return -1;
+        ++len;
+    }
+    /* c points to '\0' */
+    --c;
+    /* must end with a letter or digit */
+    if (!isalnum(*c))
+        return -1;
+    return len;
+}
+
+void strlower(char *s)
+{
+    while (*s != '\0') {
+        *s = tolower(*s);
+        ++s;
+    }
 }

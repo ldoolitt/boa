@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: signals.c,v 1.37.2.2 2002/07/23 16:03:41 jnelson Exp $*/
+/* $Id: signals.c,v 1.37.2.8 2003/01/14 05:28:24 jnelson Exp $*/
 
 #include "boa.h"
 #ifdef HAVE_SYS_WAIT_H
@@ -99,7 +99,6 @@ void sigsegv(int dummy)
     time(&current_time);
     log_error_time();
     fprintf(stderr, "caught SIGSEGV, dumping core in %s\n", tempdir);
-    fclose(stderr);
     chdir(tempdir);
     abort();
 }
@@ -115,28 +114,26 @@ void sigbus(int dummy)
     time(&current_time);
     log_error_time();
     fprintf(stderr, "caught SIGBUS, dumping core in %s\n", tempdir);
-    fclose(stderr);
     chdir(tempdir);
     abort();
 }
 
 void sigterm(int dummy)
 {
-    sigterm_flag = 1;
+    if (!sigterm_flag)
+        sigterm_flag = 1;
 }
 
-void sigterm_stage1_run(int server_s) /* lame duck mode */
-{
+void sigterm_stage1_run(void)
+{                               /* lame duck mode */
     time(&current_time);
     log_error_time();
     fputs("caught SIGTERM, starting shutdown\n", stderr);
-    FD_CLR(server_s, &block_read_fdset);
-    close(server_s);
     sigterm_flag = 2;
 }
 
-void sigterm_stage2_run() /* lame duck mode */
-{
+void sigterm_stage2_run(void)
+{                               /* lame duck mode */
     log_error_time();
     fprintf(stderr,
             "exiting Boa normally (uptime %d seconds)\n",
@@ -147,6 +144,10 @@ void sigterm_stage2_run() /* lame duck mode */
     dump_passwd();
     dump_alias();
     free_requests();
+    range_pool_empty();
+    free(server_root);
+    free(server_name);
+    server_root = NULL;
     exit(0);
 }
 
@@ -167,8 +168,11 @@ void sighup_run(void)
      * since usual permission structure prevents such reopening.
      */
 
-    FD_ZERO(&block_read_fdset);
-    FD_ZERO(&block_write_fdset);
+    /* why ? */
+    /*
+       FD_ZERO(&block_read_fdset);
+       FD_ZERO(&block_write_fdset);
+     */
     /* clear_common_env(); NEVER DO THIS */
     dump_mime();
     dump_passwd();
@@ -181,7 +185,6 @@ void sighup_run(void)
 
     log_error_time();
     fputs("successful restart\n", stderr);
-
 }
 
 void sigint(int dummy)
@@ -189,7 +192,6 @@ void sigint(int dummy)
     time(&current_time);
     log_error_time();
     fputs("caught SIGINT: shutting down\n", stderr);
-    fclose(stderr);
     chdir(tempdir);
     exit(1);
 }
@@ -201,16 +203,17 @@ void sigchld(int dummy)
 
 void sigchld_run(void)
 {
-    int status;
+    int child_status;
     pid_t pid;
 
     sigchld_flag = 0;
 
-    while ((pid = waitpid(-1, &status, WNOHANG)) > 0)
+    while ((pid = waitpid(-1, &child_status, WNOHANG)) > 0)
         if (verbose_cgi_logs) {
             time(&current_time);
             log_error_time();
-            fprintf(stderr, "reaping child %d: status %d\n", (int) pid, status);
+            fprintf(stderr, "reaping child %d: status %d\n", (int) pid,
+                    child_status);
         }
     return;
 }
