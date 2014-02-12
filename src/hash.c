@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: hash.c,v 1.14.4.12 2003/10/05 03:40:18 jnelson Exp $*/
+/* $Id: hash.c,v 1.14.4.13 2004/06/10 02:04:50 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -217,7 +217,7 @@ hash_struct *hash_insert(hash_struct * table[], const unsigned int hash,
 
     DEBUG(DEBUG_HASH) {
         fprintf(stderr,
-                "Adding key \"%s\" for value \"%s\" (hash=%d)\n",
+                "Adding key \"%s\" for value \"%s\" (hash=%u)\n",
                 key, value, hash);
     }
 
@@ -245,11 +245,12 @@ hash_struct *hash_insert(hash_struct * table[], const unsigned int hash,
     if (trailer->key == NULL || trailer->value == NULL) {
         int errno_save = errno;
 
-        free(trailer);
         if (trailer->key)
             free(trailer->key);
         if (trailer->value)
             free(trailer->value);
+        free(trailer);
+        trailer = NULL;
         errno = errno_save;
         WARN("allocated key or value is NULL");
         return NULL;
@@ -381,7 +382,8 @@ void add_mime_type(const char *extension, const char *type)
     unsigned int hash;
 
     hash = get_mime_hash_value(extension);
-    hash_insert(mime_hashtable, hash, extension, type);
+    if (hash_insert(mime_hashtable, hash, extension, type) == NULL)
+	DIE("Failed to hash_insert mime type.");
 }
 
 /*

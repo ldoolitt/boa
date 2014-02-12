@@ -20,11 +20,12 @@
  *
  */
 
-/* $Id: boa.h,v 1.63.2.24 2004/01/22 04:12:04 jnelson Exp $*/
+/* $Id: boa.h,v 1.63.2.25 2004/06/10 01:49:27 jnelson Exp $*/
 
 #ifndef _BOA_H
 #define _BOA_H
 
+#include "config.h"
 #include <errno.h>
 #include <stdlib.h>             /* malloc, free, etc. */
 #include <stdio.h>              /* stdin, stdout, stderr */

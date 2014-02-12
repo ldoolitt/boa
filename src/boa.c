@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: boa.c,v 1.99.2.20 2004/01/22 04:11:52 jnelson Exp $*/
+/* $Id: boa.c,v 1.99.2.21 2004/06/04 02:36:33 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
     /* set umask to u+rw, u-x, go-rwx */
     if (umask(077) < 0) {
         perror("umask");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     /* but first, update timestamp, because log_error_time uses it */
@@ -79,7 +79,7 @@ int main(int argc, char *argv[])
             DIE("can't dup2 /dev/null to STDIN_FILENO");
         }
 
-        close(devnullfd);
+        (void) close(devnullfd);
     }
 
     parse_commandline(argc,argv);
@@ -102,8 +102,7 @@ int main(int argc, char *argv[])
     case -1:
         /* error */
         perror("fork/getpid");
-        exit(1);
-        break;
+        exit(EXIT_FAILURE);
     case 0:
         /* child, success */
         break;
@@ -120,7 +119,7 @@ int main(int argc, char *argv[])
         }
 
         if (do_fork)
-            exit(0);
+            exit(EXIT_SUCCESS);
         break;
     }
 
@@ -149,7 +148,7 @@ static void usage(const char *programname)
 #ifndef DISABLE_DEBUG
     print_debug_usage();
 #endif
-    exit(1);
+    exit(EXIT_FAILURE);
 
 }
 
@@ -165,7 +164,7 @@ static void parse_commandline(int argc, char *argv[])
 	    server_root = strdup(optarg);
 	    if (!server_root) {
 		perror("strdup (for server_root)");
-		exit(1);
+		exit(EXIT_FAILURE);
 	    }
 	    break;
 	case 'd':
@@ -178,17 +177,17 @@ static void parse_commandline(int argc, char *argv[])
 	    if (chdir(optarg) == -1) {
 		log_error_time();
 		perror("chdir (to chroot)");
-		exit(1);
+		exit(EXIT_FAILURE);
 	    }
 	    if (chroot(optarg) == -1) {
 		log_error_time();
 		perror("chroot");
-		exit(1);
+		exit(EXIT_FAILURE);
 	    }
 	    if (chdir("/") == -1) {
 		log_error_time();
 		perror("chdir (after chroot)");
-		exit(1);
+		exit(EXIT_FAILURE);
 	    }
 	    break;
 #ifndef DISABLE_DEBUG
@@ -198,7 +197,7 @@ static void parse_commandline(int argc, char *argv[])
 #endif
 	default:
 	    usage(argv[0]);
-	    exit(1);
+	    exit(EXIT_FAILURE);
 	}
     }
 }
@@ -269,7 +268,7 @@ static void drop_privs(void)
             log_error_time();
             fprintf(stderr, "Warning: "
                     "Not running as root: no attempt to change"
-                    " to uid %d gid %d\n", server_uid, server_gid);
+                    " to uid %u gid %u\n", server_uid, server_gid);
         }
         server_gid = getgid();
         server_uid = getuid();
@@ -290,20 +289,20 @@ static void fixup_server_root()
         server_root = strdup(SERVER_ROOT);
         if (!server_root) {
             perror("strdup (SERVER_ROOT)");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
 #else
         fputs("boa: don't know where server root is.  Please #define "
               "SERVER_ROOT in boa.h\n"
               "and recompile, or use the -c command line option to "
               "specify it.\n", stderr);
-        exit(1);
+        exit(EXIT_FAILURE);
 #endif
     }
 
     if (chdir(server_root) == -1) {
         fprintf(stderr, "Could not chdir to \"%s\": aborting\n",
                 server_root);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 }

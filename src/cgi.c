@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: cgi.c,v 1.83.2.25 2004/03/01 05:35:43 jnelson Exp $ */
+/* $Id: cgi.c,v 1.83.2.26 2004/06/04 02:39:50 jnelson Exp $ */
 
 #include "boa.h"
 
@@ -96,7 +96,7 @@ void create_common_env(void)
     if (common_cgi_env_count != COMMON_CGI_COUNT) {
         log_error_time();
         fprintf(stderr, "COMMON_CGI_COUNT not high enough.\n");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     for (i = 0; i < common_cgi_env_count; ++i) {
@@ -104,7 +104,7 @@ void create_common_env(void)
             log_error_time();
             fprintf(stderr,
                     "Unable to allocate a component of common_cgi_env - out of memory.\n");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
     }
 }
@@ -168,7 +168,7 @@ static char *env_gen_extra(const char *key, const char *value,
         log_error_time();
         perror("malloc");
         log_error_time();
-        fprintf(stderr, "tried to allocate (key=value) extra=%d: %s=%s\n",
+        fprintf(stderr, "tried to allocate (key=value) extra=%u: %s=%s\n",
                 extra, key, value);
     }
     return result;
@@ -365,7 +365,7 @@ static void create_argv(request * req, char **aargv)
         if (!q) {
             log_error_doc(req);
             fputs("unable to strdup 'q' in create_argv!\n", stderr);
-            _exit(1);
+            _exit(EXIT_FAILURE);
         }
         for (aargc = 1; q && (aargc < CGI_ARGC_MAX);) {
             r = q;
@@ -478,7 +478,7 @@ int init_cgi(request * req)
                         req->pathname);
                 if (use_pipes)
                     close(pipes[1]);
-                _exit(1);
+                _exit(EXIT_FAILURE);
             }
 
             *c = '\0';
@@ -492,7 +492,7 @@ int init_cgi(request * req)
                 perror("chdir");
                 if (use_pipes)
                     close(pipes[1]);
-                _exit(1);
+                _exit(EXIT_FAILURE);
             }
 
             oldpath = req->pathname;
@@ -506,7 +506,7 @@ int init_cgi(request * req)
                 perror("unable to malloc for newpath");
                 if (use_pipes)
                     close(pipes[1]);
-                _exit(1);
+                _exit(EXIT_FAILURE);
             }
             newpath[0] = '.';
             newpath[1] = '/';
@@ -521,7 +521,7 @@ int init_cgi(request * req)
             if (dup2(pipes[1], STDOUT_FILENO) == -1) {
                 log_error_doc(req);
                 perror("dup2 - pipes");
-                _exit(1);
+                _exit(EXIT_FAILURE);
             }
             close(pipes[1]);
         } else {
@@ -529,7 +529,7 @@ int init_cgi(request * req)
             if (dup2(req->fd, STDOUT_FILENO) == -1) {
                 log_error_doc(req);
                 perror("dup2 - fd");
-                _exit(1);
+                _exit(EXIT_FAILURE);
             }
             close(req->fd);
         }
@@ -537,7 +537,7 @@ int init_cgi(request * req)
         if (set_block_fd(STDOUT_FILENO) == -1) {
             log_error_doc(req);
             perror("cgi-fcntl");
-            _exit(1);
+            _exit(EXIT_FAILURE);
         }
         /* tie post_data_fd to POST stdin */
         if (req->method == M_POST) { /* tie stdin to file */
@@ -579,7 +579,7 @@ int init_cgi(request * req)
                     fprintf(stderr,
                             "setrlimit(RLIMIT_CPU,%d): %s\n",
                             rlimit_cpu, strerror(errno));
-                    _exit(1);
+                    _exit(EXIT_FAILURE);
                 }
             }
 
@@ -591,7 +591,7 @@ int init_cgi(request * req)
                     fprintf(stderr,
                             "setrlimit(RLIMIT_DATA,%d): %s\n",
                             rlimit_data, strerror(errno));
-                    _exit(1);
+                    _exit(EXIT_FAILURE);
                 }
             }
 
@@ -600,7 +600,7 @@ int init_cgi(request * req)
                 if (retval == -1) {
                     log_error_time();
                     perror("nice");
-                    _exit(1);
+                    _exit(EXIT_FAILURE);
                 }
             }
         }
@@ -640,7 +640,7 @@ int init_cgi(request * req)
         fprintf(stderr, "Unable to execve/execl pathname: \"%s\"",
                 req->pathname);
         perror("");
-        _exit(1);
+        _exit(EXIT_FAILURE);
         break;
 
     default:

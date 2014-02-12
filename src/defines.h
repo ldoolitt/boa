@@ -19,7 +19,7 @@
  *
  */
 
-/* $Id: defines.h,v 1.107.2.37 2004/03/01 05:44:36 jnelson Exp $*/
+/* $Id: defines.h,v 1.107.2.40 2004/06/10 02:10:35 jnelson Exp $*/
 
 #ifndef _DEFINES_H
 #define _DEFINES_H
@@ -76,7 +76,7 @@
 #endif
 
 #ifndef SERVER_VERSION
-#define SERVER_VERSION 				"Boa/0.94.14rc19"
+#define SERVER_VERSION 				"Boa/0.94.14rc20"
 #endif
 
 #define CGI_VERSION				"CGI/1.1"
@@ -169,5 +169,13 @@ extern int debug_level;
 #define HEX_TO_DECIMAL(char1, char2)    \
     (((char1 >= 'A') ? (((char1 & 0xdf) - 'A') + 10) : (char1 - '0')) * 16) + \
     (((char2 >= 'A') ? (((char2 & 0xdf) - 'A') + 10) : (char2 - '0')))
+
+#ifndef EXIT_SUCCESS
+#define EXIT_SUCCESS 0
+#endif
+
+#ifndef EXIT_FAILURE
+#define EXIT_FAILURE 1
+#endif
 
 #endif

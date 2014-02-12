@@ -21,16 +21,16 @@
  *
  */
 
-/* $Id: util.c,v 1.61.2.17 2004/03/01 05:24:35 jnelson Exp $ */
+/* $Id: util.c,v 1.61.2.19 2004/06/10 01:43:09 jnelson Exp $ */
 
 #include "boa.h"
 
 static int date_to_tm(struct tm *file_gmt, const char *cmtime);
 
 /* Don't need or want the trailing nul for these character arrays */
-const char month_tab[48] =
+static const char month_tab[48] =
     "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec ";
-const char day_tab[28] = "Sun,Mon,Tue,Wed,Thu,Fri,Sat,";
+static const char day_tab[28] = "Sun,Mon,Tue,Wed,Thu,Fri,Sat,";
 
 /*
  * Name: clean_pathname
@@ -536,7 +536,7 @@ int boa_atoi(const char *s)
     if (retval < 0)
         return -1;
 
-    reconv = simple_itoa((unsigned) retval);
+    reconv = simple_itoa((unsigned int) retval);
     if (memcmp(s, reconv, strlen(s)) != 0) {
         return -1;
     }
@@ -701,7 +701,7 @@ struct dbg {
     char *mesg;
 };
 
-struct dbg debug_level_table[] = {
+static struct dbg debug_level_table[] = {
     {DEBUG_ALIAS, "Alias"},
     {DEBUG_CGI_OUTPUT, "CGI Output"},
     {DEBUG_CGI_INPUT, "CGI Input"},
@@ -751,7 +751,7 @@ void parse_debug(char *foo)
         if (i == -1) {
             /* error */
             fprintf(stderr, "Invalid level specified.\n");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
         i = -i;
     } else {
@@ -759,7 +759,7 @@ void parse_debug(char *foo)
         if (i == -1) {
             /* error */
             fprintf(stderr, "Invalid level specified.\n");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
     }
     for (p = debug_level_table;

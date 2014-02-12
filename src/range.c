@@ -28,8 +28,7 @@
 
 static void range_abort(request * req);
 static void range_add(request * req, unsigned long start, unsigned long stop);
-
-Range *range_pool = NULL;
+static Range *range_pool = NULL;
 
 void ranges_reset(request * req)
 {
@@ -85,7 +84,7 @@ static void range_abort(request * req)
 
     /* flag that we had an error, so no future ranges will be accepted */
     req->ranges = range_pool_pop();
-    req->ranges->stop = ULONG_MAX;
+    req->ranges->stop = -1;
 }
 
 static void range_add(request * req, unsigned long start, unsigned long stop)
@@ -344,11 +343,11 @@ int range_parse(request * req, const char *str)
             if ((fcode & ACTMASK1) == PB)
                 start = start * 10 + (c - '0');
             else if ((fcode & ACTMASK1) == DB)
-                start = ULONG_MAX;
+                start = -1;
             else if ((fcode & ACTMASK1) == PE)
                 stop = stop * 10 + (c - '0');
             else if ((fcode & ACTMASK1) == DE)
-                stop = ULONG_MAX;
+                stop = -1;
             if ((fcode & ACTMASK2) == AR) {
                 log_error_doc(req);
                 log_error_time();
@@ -356,7 +355,7 @@ int range_parse(request * req, const char *str)
                 range_abort(req);
                 return 0;
             } else if ((fcode & ACTMASK2) == SR) {
-                if ((start == stop) && (start == ULONG_MAX)) {
+                if ((start == stop) && (start == -1)) {
                     /* neither was specified, or they were very big. */
                     log_error_doc(req);
                     log_error_time();

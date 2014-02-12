@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: escape.c,v 1.7.2.1 2002/10/26 14:42:31 jnelson Exp $ */
+/* $Id: escape.c,v 1.7.2.2 2004/06/04 02:45:26 jnelson Exp $ */
 
 /*
  unreserved = alnum | mark
@@ -62,7 +62,7 @@ void build_needs_escape(void)
         fprintf(stderr,
                 "NEEDS_ESCAPE_SHIFT configuration error -- "
                 "%d should be <= log2(%d)\n", NEEDS_ESCAPE_SHIFT, a);
-        exit(1);
+        exit(EXIT_FAILURE);
     } else if (a >= 2 * NEEDS_ESCAPE_WORD_LENGTH) {
         /* needs_escape_shift configuration suboptimal */
     } else {

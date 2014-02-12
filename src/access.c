@@ -17,7 +17,7 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: access.c,v 1.1.2.4 2003/02/02 05:02:18 jnelson Exp $ */
+/* $Id: access.c,v 1.1.2.5 2004/06/04 02:50:53 jnelson Exp $ */
 
 #include <string.h>
 #include <stdlib.h>
@@ -27,14 +27,16 @@
 
 struct access_node {
     char *pattern;
-    char type;
+    enum access_type type;
 };
 
 static int n_access;
 
 static struct access_node *nodes = NULL;
 
-void access_shutdown(void)
+static void access_shutdown(void);
+
+static void access_shutdown(void)
 {
     int i;
 
@@ -60,7 +62,7 @@ void access_init(void)
     }
 }
 
-void access_add(const char *pattern, int type)
+void access_add(const char *pattern, enum access_type type)
 {
     nodes = realloc(nodes, (n_access + 1) * sizeof (struct access_node));
     if (!nodes) {
@@ -76,7 +78,7 @@ void access_add(const char *pattern, int type)
 }                               /* access_add */
 
 
-int access_allow(const char *file)
+enum access_type access_allow(const char *file)
 {
     int i;
 

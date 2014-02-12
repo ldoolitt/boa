@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: pipe.c,v 1.39.2.14 2003/08/16 18:55:21 jnelson Exp $*/
+/* $Id: pipe.c,v 1.39.2.15 2004/06/10 01:58:29 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -155,7 +155,6 @@ int write_from_pipe(request * req)
     }
 
     req->header_line += bytes_written;
-    req->filepos += bytes_written;
     req->bytes_written += bytes_written;
 
     /* if there won't be anything to write next time, switch state */
@@ -187,7 +186,9 @@ retrysendfile:
         /* shouldn't get here, but... */
         bytes_written = 0;
     } else {
-        bytes_written = sendfile(req->fd, req->data_fd, &(req->filepos), bytes_to_write);
+        bytes_written = sendfile(req->fd, req->data_fd,
+                                 &(req->ranges->start),
+                                 bytes_to_write);
         if (bytes_written < 0) {
             if (errno == EWOULDBLOCK || errno == EAGAIN) {
                 return -1;          /* request blocked at the pipe level, but keep going */
@@ -206,17 +207,21 @@ retrysendfile:
                 }
             }
             return 0;
-        } /* bytes_written */
+        } else if (bytes_written == 0) {
+            /* not sure how to handle this.
+             * For now, treat it like it is blocked.
+             */
+            return -1;
+        }/* bytes_written */
     } /* bytes_to_write */
 
-    /* sendfile automatically updates req->filepos,
+    /* sendfile automatically updates req->ranges->start
      * don't touch!
-     * req->filepos += bytes_written;
+     * req->ranges->start += bytes_written;
      */
-    req->ranges->start += bytes_written;
     req->bytes_written += bytes_written;
 
-    if (req->ranges->stop + 1 == req->ranges->start) {
+    if (req->ranges->stop + 1 <= req->ranges->start) {
         return complete_response(req);
     }
     return 1;
@@ -243,6 +248,9 @@ int io_shuffle(request * req)
 
     /* FIXME: This function doesn't take into account req->filesize
      * when *reading* into the buffer. Grr.
+     * June 09, 2004: jdn, I don't think it's a problem anymore,
+     * because the ranges are verified against the filesize,
+     * and we cap bytes_to_read at bytes_to_write.
      */
     bytes_to_read = BUFFER_SIZE - req->buffer_end - 256;
 
@@ -323,7 +331,6 @@ int io_shuffle(request * req)
     }
 
     req->buffer_start += bytes_written;
-    /* req->filepos is not used here */
     req->bytes_written += bytes_written;
 
     if (bytes_to_write == bytes_written) {

@@ -18,7 +18,7 @@
  *
  */
 
-/* $Id: mmap_cache.c,v 1.9.2.6 2003/12/24 05:26:58 jnelson Exp $*/
+/* $Id: mmap_cache.c,v 1.9.2.7 2004/06/04 02:44:59 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -34,7 +34,7 @@ static struct mmap_entry mmap_list[MMAP_LIST_SIZE];
 
 struct mmap_entry *find_mmap(int data_fd, struct stat *s)
 {
-    char *m;
+    void *m;
     int i, start;
     mmap_list_total_requests++;
     i = start = MMAP_LIST_HASH(s->st_dev, s->st_ino, s->st_size);

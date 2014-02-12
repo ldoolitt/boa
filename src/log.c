@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: log.c,v 1.36.2.24 2004/01/22 04:11:07 jnelson Exp $*/
+/* $Id: log.c,v 1.36.2.25 2004/06/10 01:46:37 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -260,8 +260,7 @@ void log_error_mesg_fatal(const char *file, int line, const char *func, const ch
     fprintf(stderr, "%s%s:%d (%s) - ", get_commonlog_time(), file, line, func);
     errno = errno_save;
     perror(mesg);
-    errno = errno_save;
-    exit(errno);
+    exit(EXIT_FAILURE);
 }
 
 
@@ -281,7 +280,6 @@ void log_error_mesg_fatal(const char *file, int line, const char *mesg)
     fprintf(stderr, "%s%s:%d - ", get_commonlog_time(), file, line);
     errno = errno_save;
     perror(mesg);
-    errno = errno_save;
-    exit(errno);
+    exit(EXIT_FAILURE);
 }
 #endif

@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: poll.c,v 1.2.2.16 2003/12/09 04:17:22 jnelson Exp $*/
+/* $Id: poll.c,v 1.2.2.17 2004/06/04 02:44:39 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -112,7 +112,7 @@ void loop(int server_s)
                     /* problem with the server socket, unexpected */
                     log_error("server pfd revent contains "
                       "POLLNVAL or POLLERR! Exiting.");
-                    exit(1);
+                    exit(EXIT_FAILURE);
                 } else if (pfds[server_pfd].revents & BOA_READ) {
                     pending_requests = 1;
                 }

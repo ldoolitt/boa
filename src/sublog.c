@@ -18,7 +18,7 @@
  *
  */
 
-/* $Id: sublog.c,v 1.6.2.2 2003/01/04 03:00:40 jnelson Exp $*/
+/* $Id: sublog.c,v 1.6.2.4 2004/06/04 02:49:13 jnelson Exp $*/
 
 #include <errno.h>
 #include <stdio.h>
@@ -55,7 +55,7 @@ int open_pipe_fd(char *command)
             close(pipe_fds[0]);
         }
         execl("/bin/sh", "sh", "-c", command, (char *) 0);
-        exit(127);
+        exit(EXIT_FAILURE);
     }
     close(pipe_fds[0]);
     if (pid < 0) {
@@ -126,19 +126,19 @@ int main(int argc, char *argv[])
     fd = open_gen_fd(argv[1]);
     if (fd < 0) {
         perror("open_gen_fd");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     while ((nr = read(0, buff, sizeof (buff))) != 0) {
         if (nr < 0) {
             if (errno == EINTR)
                 continue;
             perror("read");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
         nw = write(fd, buff, nr);
         if (nw < 0) {
             perror("write");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
     }
     return 0;

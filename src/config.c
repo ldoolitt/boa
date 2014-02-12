@@ -18,7 +18,7 @@
  *
  */
 
-/* $Id: config.c,v 1.31.2.25 2004/03/05 03:41:33 jnelson Exp $*/
+/* $Id: config.c,v 1.31.2.27 2004/06/04 02:49:13 jnelson Exp $*/
 
 #include "boa.h"
 #include "access.h"
@@ -191,7 +191,7 @@ static void c_set_user(char *v1, char *v2, void *t)
             fprintf(stderr, "No such user: %s\n", v1);
             if (current_uid)
                 return;
-            exit(1);
+            exit(EXIT_FAILURE);
         }
         server_uid = passwdbuf->pw_uid;
     }
@@ -219,7 +219,7 @@ static void c_set_group(char *v1, char *v2, void *t)
             fprintf(stderr, "No such group: %s\n", v1);
             if (current_uid)
                 return;
-            exit(1);
+            exit(EXIT_FAILURE);
         }
         server_gid = groupbuf->gr_gid;
     }
@@ -400,7 +400,7 @@ static void apply_command(Command * p, char *args)
         if (*args == '\0') {
             log_error_time();
             fprintf(stderr, "expected at least 1 arg! (%s)\n", p->name);
-            exit(33);
+            exit(EXIT_FAILURE);
         }
 
         second = args;
@@ -422,7 +422,7 @@ static void apply_command(Command * p, char *args)
         (p->action) (args, second, p->object);
         break;
     default:
-        exit(33);
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -473,7 +473,7 @@ static void parse(FILE * f)
             log_error_time();
             fprintf(stderr, "Line %d: Did not find keyword \"%s\"\n", line,
                     buf);
-            exit(1);
+            exit(EXIT_FAILURE);
         } else {
             DEBUG(DEBUG_CONFIG) {
                 log_error_time();
@@ -508,7 +508,7 @@ void read_config_files(void)
     config = fopen(config_file_name, "r");
     if (!config) {
         fputs("Could not open boa.conf for reading.\n", stderr);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     parse(config);
     fclose(config);
@@ -519,19 +519,19 @@ void read_config_files(void)
 
         if (gethostname(temp_name, 100) == -1) {
             perror("gethostname:");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
 
         he = gethostbyname(temp_name);
         if (he == NULL) {
             perror("gethostbyname:");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
 
         server_name = strdup(he->h_name);
         if (server_name == NULL) {
             perror("strdup:");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
     }
     tempdir = getenv("TMP");
@@ -541,20 +541,20 @@ void read_config_files(void)
     if (single_post_limit < 0) {
         fprintf(stderr, "Invalid value for single_post_limit: %d\n",
                 single_post_limit);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     if (vhost_root && virtualhost) {
         fprintf(stderr, "Both VHostRoot and VirtualHost were enabled, and "
                 "they are mutually exclusive.\n");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     if (vhost_root && document_root) {
         fprintf(stderr,
                 "Both VHostRoot and DocumentRoot were enabled, and "
                 "they are mutually exclusive.\n");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     if (!default_vhost) {

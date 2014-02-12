@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: get.c,v 1.76.2.33 2004/03/01 05:25:23 jnelson Exp $*/
+/* $Id: get.c,v 1.76.2.34 2004/06/10 01:55:39 jnelson Exp $*/
 
 #include "boa.h"
 #include "access.h"
@@ -36,8 +36,8 @@
 /* #define ALLOW_LOCAL_REDIRECT */
 
 /* local prototypes */
-int get_cachedir_file(request * req, struct stat *statbuf);
-int index_directory(request * req, char *dest_filename);
+static int get_cachedir_file(request * req, struct stat *statbuf);
+static int index_directory(request * req, char *dest_filename);
 
 /*
  * Name: init_get
@@ -330,7 +330,7 @@ int init_get(request * req)
     if (!req->ranges) {
         req->ranges = range_pool_pop();
         req->ranges->start = 0;
-        req->ranges->stop = ULONG_MAX;
+        req->ranges->stop = -1;
         if (!ranges_fixup(req)) {
             return 0;
         }
@@ -349,13 +349,12 @@ int init_get(request * req)
             ranges_reset(req);
             req->ranges = range_pool_pop();
             req->ranges->start = 0;
-            req->ranges->stop = ULONG_MAX;
+            req->ranges->stop = -1;
             if (!ranges_fixup(req)) {
                 return 0;
             }
             send_r_request_ok(req);
         }
-        req->filepos = req->ranges->start;
     }
 
     if (req->method == M_HEAD) {
@@ -407,7 +406,6 @@ int init_get(request * req)
             return 0;
         }
         req->buffer_end += bytes_free;
-        req->filepos += bytes_free;
         req->bytes_written += bytes_free;
         r->start += bytes_free;
         if (bytes_free == want) {
@@ -487,7 +485,6 @@ int process_get(request * req)
         }
     }
 
-    req->filepos += bytes_written;
     req->bytes_written += bytes_written;
     req->ranges->start += bytes_written;
 
@@ -615,7 +612,7 @@ int get_dir(request * req, struct stat *statbuf)
     }
 }
 
-int get_cachedir_file(request * req, struct stat *statbuf)
+static int get_cachedir_file(request * req, struct stat *statbuf)
 {
 
     char pathname_with_index[MAX_PATH_LENGTH];
@@ -669,7 +666,7 @@ int get_cachedir_file(request * req, struct stat *statbuf)
  * stat() is required.
  */
 
-int index_directory(request * req, char *dest_filename)
+static int index_directory(request * req, char *dest_filename)
 {
     DIR *request_dir;
     FILE *fdstream;

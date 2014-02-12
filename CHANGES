@@ -161,7 +161,7 @@
  * when range requests are determined to be invalid, use log_error_doc
  * make log messages when URI contains invalid characters or doesn't
    start with a '/' less scary
- * if creating a temporary file, or setting it to close-on-exec fails, 
+ * if creating a temporary file, or setting it to close-on-exec fails,
    send_r_error
  * if key or value for an http header is invalid, log it.
  * be more strict with range parsing
@@ -182,14 +182,14 @@
  * update a comment regarding the 100 Continue response
  * use BOA_READ and BOA_WRITE macros in select.c
  * backport (but leave it commented out) USE_SETRLIMIT stuff for cgi's
-   This (currently disabled) functionality enables the use of 
+   This (currently disabled) functionality enables the use of
    CGIRlimit{CPU,Data,Nice} configuration values for CGI execution.
  * backported DEBUG debugging and logging code allows run-time
-   enabling of finer-grained debugging. Disable with 
+   enabling of finer-grained debugging. Disable with
    --disable-verbose (worth about 4K of binary size)
- * split out usage and parsing commandline tasks into their own functions 
+ * split out usage and parsing commandline tasks into their own functions
    (usage and parse_commandline)
- * in poll.c, don't just check for BOA_READ, but handle all "error" 
+ * in poll.c, don't just check for BOA_READ, but handle all "error"
    conditions first, then check for /any/ revent.
  * force response code to 400 when client closes connection before request
    is fully read.
@@ -207,7 +207,7 @@
  * add new_clean_pathname from now-defunct 0.95 branch
    (unused via #if 0)
  * change common_cgi_env to be dynamically sized, using realloc.
- * add new keyword, CGIEnv, which takes 2 parameters and adds them as 
+ * add new keyword, CGIEnv, which takes 2 parameters and adds them as
    the key and value of another common environment variable for CGI.
    This item requires the previous change.
  * split modified_since into 2 routines:
@@ -230,7 +230,30 @@
    (seconds > 59, etc...)
  * implement ConcealServerIdentity
  * treat headers with blank content as non-error but do not parse them
-   
+ * as of 0.94.14rc20:
+ * fix potential NULL-pointer dereference in hash_insert, introduced
+   in 0.94.14rc16.
+ * try to make SuSE-ready:
+   rpm/{boa.init, boa.init-redhat, boa.init-suse, boa.spec}
+ * use S_ISREG combined with access(2) rather than
+   using the statbuf stuff to determine if a cgi is accessible
+ * optionally #define EXIT_FAILURE and EXIT_SUCCESS, and use them
+   everywhere.
+ * mark a few variables and functions 'static'
+ * use %u instead of %d when printing an unsigned int
+ * mmap returns void * not char *
+ * change access_node->type to an enum
+ * make boa.h #include 'config.h' *first*
+ * use -1 instead of ULONG_MAX (that way, if the datatype ever changes,
+   we always get it's maximum)
+ * fix bug in multiple non-contiguous range requests for files that
+   use sendfile(2)
+ * reduce some noise if a request in a keepalive chain is shut down
+   without having read a single byte.
+ * fix potential memory access bug in hashing
+ * update config.sub and config.guess to the latest available
+ * use CHANGES not ChangeLog
+
 ** Changes from 0.94.12 to 0.94.13
  * Change many instances of log_error_mesg + exit to DIE macro
  * Change all instance of log_error_mesg (without exit) to WARN macro

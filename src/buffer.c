@@ -19,7 +19,7 @@
  *
  */
 
-/* $Id: buffer.c,v 1.10.2.11 2004/03/05 04:19:00 jnelson Exp $ */
+/* $Id: buffer.c,v 1.10.2.12 2004/06/10 01:41:09 jnelson Exp $ */
 
 #include "boa.h"
 #include "escape.h"
@@ -43,7 +43,7 @@ int req_write(request * req, const char *msg)
     if (req->buffer_end + msg_len > BUFFER_SIZE) {
         log_error_doc(req);
         fprintf(stderr, "There is not enough room in the buffer to"
-                " copy %d bytes (%d available). Shutting down connection.\n",
+                " copy %u bytes (%d available). Shutting down connection.\n",
                 msg_len,
                 BUFFER_SIZE - req->buffer_end);
 #ifdef FACSIST_LOGGING

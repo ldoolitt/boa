@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: request.c,v 1.112.2.48 2004/03/05 03:40:40 jnelson Exp $*/
+/* $Id: request.c,v 1.112.2.49 2004/06/10 01:45:13 jnelson Exp $*/
 
 #include "boa.h"
 #include <stddef.h>             /* for offsetof */
@@ -282,7 +282,7 @@ static void sanitize_request(request * req, int new_req)
 
     DEBUG(DEBUG_REQUEST) {
         log_error_time();
-        fprintf(stderr, "req: %p, offset: %d\n", (void *) req,
+        fprintf(stderr, "req: %p, offset: %u\n", (void *) req,
                 bytes_to_zero);
     }
 
@@ -331,8 +331,17 @@ static void free_request(request * req)
     if (req->status == TIMED_OUT && req->response_status == 0)
         req->response_status = 408;
 
-    /* always log */
-    log_access(req);
+    if (req->kacount < ka_max &&
+        !req->logline &&
+        req->client_stream_pos == 0) {
+        /* A keepalive request wherein we've read
+         * nothing.
+         * Ignore.
+         */
+        ;
+    } else {
+        log_access(req);
+    }
 
     if (req->mmap_entry_var)
         release_mmap(req->mmap_entry_var);

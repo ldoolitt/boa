@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: signals.c,v 1.37.2.10 2003/10/05 04:15:29 jnelson Exp $*/
+/* $Id: signals.c,v 1.37.2.11 2004/06/04 02:49:13 jnelson Exp $*/
 
 #include "boa.h"
 #ifdef HAVE_SYS_WAIT_H
@@ -179,7 +179,7 @@ void sigterm_stage2_run(void)
     free(server_root);
     free(server_name);
     server_root = NULL;
-    exit(0);
+    exit(EXIT_SUCCESS);
 }
 
 
@@ -224,7 +224,7 @@ void sigint(int dummy)
     log_error_time();
     fputs("caught SIGINT: shutting down\n", stderr);
     chdir(tempdir);
-    exit(1);
+    exit(EXIT_FAILURE);
 }
 
 void sigchld(int dummy)

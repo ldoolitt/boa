@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: alias.c,v 1.70.2.16 2003/12/24 05:21:55 jnelson Exp $ */
+/* $Id: alias.c,v 1.70.2.18 2004/06/10 01:53:42 jnelson Exp $ */
 
 #include "boa.h"
 
@@ -40,7 +40,7 @@ static alias *alias_hashtable[ALIAS_HASHTABLE_SIZE];
 static alias *find_alias(char *uri, unsigned int urilen);
 static int init_script_alias(request * req, alias * current1, unsigned int uri_len);
 
-int get_alias_hash_value(const char *file);
+static unsigned int get_alias_hash_value(const unsigned char *file);
 
 /*
  * Name: get_alias_hash_value
@@ -50,7 +50,7 @@ int get_alias_hash_value(const char *file);
  * Note: stops at first '/' (or '\0')
  */
 
-int get_alias_hash_value(const char *file)
+static unsigned int get_alias_hash_value(const unsigned char *file)
 {
     unsigned int hash = 0;
     unsigned int i = 0;
@@ -64,7 +64,7 @@ int get_alias_hash_value(const char *file)
         return 0;
     }
 
-    hash = file[i++];
+    hash = (unsigned int) file[i++];
     while ((c = file[i++]) && c != '/')
         hash += (unsigned int) c;
 
@@ -80,9 +80,9 @@ int get_alias_hash_value(const char *file)
 
 void add_alias(const char *fakename, const char *realname, enum ALIAS type)
 {
-    int hash;
+    unsigned int hash;
     alias *old, *new;
-    int fakelen, reallen;
+    unsigned int fakelen, reallen;
 
     /* sanity checking */
     if (fakename == NULL || realname == NULL) {
@@ -99,7 +99,7 @@ void add_alias(const char *fakename, const char *realname, enum ALIAS type)
 
     DEBUG(DEBUG_ALIAS) {
         log_error_time();
-        fprintf(stderr, "%s:%d - Going to add alias: \"%s\" -=> \"%s\" (hash: %d)\n",
+        fprintf(stderr, "%s:%d - Going to add alias: \"%s\" -=> \"%s\" (hash: %u)\n",
                 __FILE__, __LINE__, fakename, realname, hash);
     }
 
@@ -141,7 +141,7 @@ void add_alias(const char *fakename, const char *realname, enum ALIAS type)
     DEBUG(DEBUG_ALIAS) {
         log_error_time();
         fprintf(stderr,
-                "%s:%d - ADDED alias: \"%s\" -=> \"%s\" hash: %d\n",
+                "%s:%d - ADDED alias: \"%s\" -=> \"%s\" hash: %u\n",
                 __FILE__, __LINE__, fakename, realname, hash);
     }
 }
@@ -159,7 +159,7 @@ void add_alias(const char *fakename, const char *realname, enum ALIAS type)
 static alias *find_alias(char *uri, unsigned int urilen)
 {
     alias *current;
-    int hash;
+    unsigned int hash;
 
     /* Find ScriptAlias, Alias, or Redirect */
 
@@ -173,7 +173,7 @@ static alias *find_alias(char *uri, unsigned int urilen)
     DEBUG(DEBUG_ALIAS) {
         log_error_time();
         fprintf(stderr,
-                "%s:%d - looking for \"%s\" (hash=%d,len=%d)...\n",
+                "%s:%d - looking for \"%s\" (hash=%u,len=%u)...\n",
                 __FILE__, __LINE__, uri, hash, urilen);
     }
 
@@ -460,7 +460,7 @@ static int init_script_alias(request * req, alias * current1, unsigned int uri_l
     struct stat statbuf;
 
     int i = 0;
-    unsigned char c;
+    char c;
     int err;
 
     /* copies the "real" path + the non-alias portion of the
@@ -534,7 +534,6 @@ static int init_script_alias(request * req, alias * current1, unsigned int uri_l
         if (c == '/') {
             pathname[i] = '\0';
             err = stat(pathname, &statbuf);
-            pathname[i] = '/';
             if (err == -1) {
                 send_r_not_found(req);
                 return 0;
@@ -543,16 +542,19 @@ static int init_script_alias(request * req, alias * current1, unsigned int uri_l
             /* is it a dir? */
             if (!S_ISDIR(statbuf.st_mode)) {
                 /* check access */
-                if (!(statbuf.st_mode & (S_IFREG | /* regular file */
-                                         (S_IRUSR | S_IXUSR) | /* u+rx */
-                                         (S_IRGRP | S_IXGRP) | /* g+rx */
-                                         (S_IROTH | S_IXOTH)))) { /* o+rx */
+                /* the file must be readble+executable by at least
+                 * u,g,or o 
+                 */
+                if (!S_ISREG(statbuf.st_mode) || access(pathname, R_OK|X_OK)) {
                     send_r_forbidden(req);
                     return 0;
                 }
+                pathname[i] = '/';
                 /* stop here */
                 break;
             }
+            /* if here, it's a dir (or it points to one!) */
+            pathname[i] = '/';
         }
     } while (c != '\0');
 
@@ -572,10 +574,10 @@ static int init_script_alias(request * req, alias * current1, unsigned int uri_l
         /* is it a dir? */
         if (!S_ISDIR(statbuf.st_mode)) {
             /* check access */
-            if (!(statbuf.st_mode & (S_IFREG | /* regular file */
-                                     (S_IRUSR | S_IXUSR) | /* u+rx */
-                                     (S_IRGRP | S_IXGRP) | /* g+rx */
-                                     (S_IROTH | S_IXOTH)))) { /* o+rx */
+            /* the file must be readble+executable by at least
+             * u,g,or o 
+             */
+            if (!S_ISREG(statbuf.st_mode) || access(pathname, R_OK|X_OK)) {
                 send_r_forbidden(req);
                 return 0;
             }
@@ -588,7 +590,7 @@ static int init_script_alias(request * req, alias * current1, unsigned int uri_l
 
     /* we have path_info if c == '/'... still have to check for query */
     else if (c == '/') {
-        int hash;
+        unsigned int hash;
         alias *current;
         int path_len;
 

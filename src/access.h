@@ -18,17 +18,15 @@
  *
  */
 
-/* $Id: access.h,v 1.1.2.2 2002/12/25 19:02:12 jnelson Exp $ */
+/* $Id: access.h,v 1.1.2.3 2004/06/04 02:50:53 jnelson Exp $ */
 
 #ifndef _ACCESS_H
 #define _ACCESS_H
 
-#define ACCESS_DENY 0
-#define ACCESS_ALLOW 1
+enum access_type { ACCESS_DENY, ACCESS_ALLOW };
 
-void access_shutdown(void);
 void access_init(void);
-void access_add(const char *pattern, const int type);
-int access_allow(const char *file);
+void access_add(const char *pattern, enum access_type);
+enum access_type access_allow(const char *file);
 
 #endif                          /* _ACCESS_H */
