@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: cgi.c,v 1.83.2.19 2003/02/19 02:56:20 jnelson Exp $ */
+/* $Id: cgi.c,v 1.83.2.20 2003/02/24 02:47:57 jnelson Exp $ */
 
 #include "boa.h"
 
@@ -176,12 +176,11 @@ int add_cgi_env(request * req, const char *key, const char *value,
             memcpy(p, "HTTP_", 5);
         req->cgi_env[req->cgi_env_index++] = p;
         return 1;
-    } else {
-        log_error_doc(req);
-        fprintf(stderr, "Unable to generate additional CGI Environment "
-                "variable \"%s%s=%s\" -- not enough space!\n",
-                (prefix_len ? "HTTP_" : ""), key, value);
     }
+    log_error_doc(req);
+    fprintf(stderr, "Unable to generate additional CGI Environment "
+            "variable \"%s%s=%s\" -- not enough space!\n",
+            (prefix_len ? "HTTP_" : ""), key, value);
     return 0;
 }
 

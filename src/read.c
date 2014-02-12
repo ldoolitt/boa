@@ -2,7 +2,7 @@
  *  Boa, an http server
  *  Copyright (C) 1995 Paul Phillips <paulp@go2net.com>
  *  Some changes Copyright (C) 1996,97 Larry Doolittle <ldoolitt@boa.org>
- *  Some changes Copyright (C) 1997,99 Jon Nelson <jnelson@boa.org>
+ *  Some changes Copyright (C) 1997,99,2000-2003 Jon Nelson <jnelson@boa.org>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: read.c,v 1.49.2.6 2003/02/19 03:26:51 jnelson Exp $*/
+/* $Id: read.c,v 1.49.2.9 2003/03/07 03:06:42 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -117,9 +117,9 @@ int read_header(request * req)
 
             if (req->header_end - req->header_line >= MAX_HEADER_LENGTH) {
                 log_error_doc(req);
-                fprintf(stderr, "Header \"%s\" too long at %d bytes.\n",
-                        req->header_line,
-                        req->header_end - req->header_line);
+                fprintf(stderr, "Header too long at %d bytes: \"%s\"\n",
+                        req->header_end - req->header_line,
+                        req->header_line);
                 send_r_bad_request(req);
                 return 0;
             }
@@ -128,10 +128,12 @@ int read_header(request * req)
 
             if (req->logline) {
                 if (process_option_line(req) == 0) {
+                    /* errors already logged */
                     return 0;
                 }
             } else {
                 if (process_logline(req) == 0)
+                    /* errors already logged */
                     return 0;
                 if (req->http_version == HTTP09)
                     return process_header_end(req);
@@ -237,22 +239,16 @@ int read_header(request * req)
         if (bytes < 0) {
             if (errno == EINTR)
                 return 1;
-            if (errno == EAGAIN || errno == EWOULDBLOCK) /* request blocked */
+            else if (errno == EAGAIN || errno == EWOULDBLOCK) /* request blocked */
                 return -1;
-            /*
-               else if (errno == EBADF || errno == EPIPE) {
-
-               req->status = DEAD;
-               return 0;
-             */
             log_error_doc(req);
             perror("header read"); /* don't need to save errno because log_error_doc does */
             return 0;
         } else if (bytes == 0) {
-            /*
-               log_error_time();
-               fputs("unexpected end of headers\n", stderr);
-             */
+#ifndef QUIET_DISCONNECT
+            log_error_doc(req);
+            fputs("client unexpectedly closed connection.\n", stderr);
+#endif
             return 0;
         }
 
@@ -315,10 +311,6 @@ int read_body(request * req)
 
     if (bytes_read == -1) {
         if (errno == EWOULDBLOCK || errno == EAGAIN) {
-            /*
-               req->status = BODY_WRITE;
-               return 1;
-             */
             return -1;
         } else {
             boa_perror(req, "read body");

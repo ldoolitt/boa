@@ -1,6 +1,6 @@
 /*
  *  Boa, an http server
- *  This file Copyright (C) 2000 by:
+ *  This file Copyright (C) 2000,2003 by:
  *   Jon Nelson <jnelson@boa.org> and Larry Doolittle <ldoolitt@boa.org>
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -97,7 +97,7 @@ static void range_add(request * req, unsigned long start, unsigned long stop)
     Range *r = range_pool_pop();
 
     DEBUG(DEBUG_RANGE) {
-        fprintf(stderr, "range.c, add_range: got: %lu-%lu\n", start, stop);
+        fprintf(stderr, "range.c, range_add: got: %lu-%lu\n", start, stop);
     }
 
     for(prev = req->ranges;prev;prev = prev->next) {
@@ -117,7 +117,7 @@ static void range_add(request * req, unsigned long start, unsigned long stop)
 }
 
 /* parse_range converts the range string to a binary form _before_
- * we know the size of the file.  fixup_ranges touches up that
+ * we know the size of the file.  ranges_fixup touches up that
  * binary form _after_ we have req->filesize to work with.
  */
 int ranges_fixup(request * req)
@@ -131,6 +131,17 @@ int ranges_fixup(request * req)
     prev = NULL;
     r = req->ranges;
     req->ranges = NULL;
+
+    if (req->filesize == 0) {
+        Range *temp;
+
+        while(r) {
+            temp = r;
+            r = r->next;
+            range_pool_push(temp);
+        }
+    }
+
     while(r) {
         /* possible situations:
          * 1) start == -1 :: valid (so far)
@@ -140,18 +151,48 @@ int ranges_fixup(request * req)
          * 5) start > stop && start != -1 :: invalid
          */
         DEBUG(DEBUG_RANGE) {
-            fprintf(stderr, "range.c: fixup_ranges: %lu-%lu\n", r->start, r->stop);
+            fprintf(stderr, "range.c: ranges_fixup: %lu-%lu\n", r->start, r->stop);
         }
 
-        if ((long) r->start == -1) {
-            r->start = req->filesize - r->stop;
-            /* FIXME: Sanity check here for r->stop being "weird" */
-            r->stop = req->filesize - 1;
-        } else if (r->stop == -1) {
+        /* no stop range specified or stop is too big.
+         * RFC says it gets req->filesize - 1
+         */
+        if (r->stop == -1 || r->stop >= req->filesize) {
             /* r->start is *not* -1 */
             r->stop = req->filesize - 1;
-        } else if (r->start > r->stop) {
-            /* bad range . ignore */
+        }
+
+        /* no start range specified.
+         * (such as -499 == last *500* bytes
+         * thus, bytes (filesize - 499) through (filesize - 1)
+         * assuming a 600 byte file:
+         *       -=> 600 - 499 = 100 through 599.
+         * assuming a 6 byte file, and last 4 bytes:
+         *       -=> 6 - 4 = 2 through 6 - 1 = 5
+         * RFC says it gets filesize - stop.
+         * Stop is already valid from a filesize point of view.
+         */
+        if ((long) r->start == -1) {
+            /* last N bytes of the entity body.
+             * r->stop contains is N
+             * due to the above test we are guaranteed
+             * that r->stop is < req->filesize
+             * we have to reset r->stop here, though
+             */
+            r->start = req->filesize - r->stop;
+            r->stop = req->filesize - 1;
+        }
+
+        /* start may only be <= stop.
+         * in the case that start is == stop,
+         * we write 1 byte.
+         * in the case that start is < stop,
+         *  we're OK so long as start > 0
+         */
+        /* since start <= stop and stop < filesize,
+         * start < filesize
+         */
+        if ((long) r->start < 0 || r->start > r->stop) {
             Range *temp;
 
             temp = r;
@@ -160,31 +201,16 @@ int ranges_fixup(request * req)
             r = r->next;
             range_pool_push(temp);
             DEBUG(DEBUG_RANGE) {
-                fprintf(stderr, "end of range is invalid. skipping.\n");
+                fprintf(stderr, "start or end of range is invalid. skipping.\n");
             }
             continue;
         }
+
+        /* r->stop and r->start are now both guaranteed < req->filesize */
+        /* r->stop and r->start may be the same, however */
 
         DEBUG(DEBUG_RANGE) {
-            fprintf(stderr, "start: %lu\tstop: %lu\n", r->start, r->stop);
-        }
-        if (r->start > req->filesize) { /* should we also check r->stop? */
-            /* bad range . ignore */
-            Range *temp;
-
-            temp = r;
-            if (prev)
-                prev->next = r->next;
-            r = r->next;
-            range_pool_push(temp);
-            DEBUG(DEBUG_RANGE) {
-                fprintf(stderr, "start of range is invalid. skipping.\n");
-            }
-            continue;
-        }
-
-        if (r->stop > req->filesize - 1) {
-            r->stop = req->filesize - 1;
+            fprintf(stderr, "ending with start: %lu\tstop: %lu\n", r->start, r->stop);
         }
 
         if (prev == NULL)
@@ -201,7 +227,7 @@ int ranges_fixup(request * req)
     }
 
     DEBUG(DEBUG_RANGE) {
-        fprintf(stderr, "fixup_ranges returning 1\n");
+        fprintf(stderr, "ranges_fixup returning 1\n");
     }
     return 1;
 }
@@ -218,7 +244,7 @@ int ranges_fixup(request * req)
  */
 int range_parse(request * req, const char *str)
 {
-
+    const char *initial_str = str;
 #ifdef FASCIST_LOGGING
     fprintf(stderr, "parsing: %s\n", str);
 #endif
@@ -226,6 +252,7 @@ int range_parse(request * req, const char *str)
     /* technically, this should be bytes (whitespace) = .... */
     if (strncasecmp(str, "bytes=", 6)) {
         /* error.  Doesn't start with 'bytes=' */
+        log_error_doc(req);
         fprintf(stderr, "range \"%s\" doesn't start with \"bytes=\"\n",
                 str);
         return 0;
@@ -325,9 +352,18 @@ int range_parse(request * req, const char *str)
             else if ((fcode & ACTMASK1) == DE)
                 stop = ULONG_MAX;
             if ((fcode & ACTMASK2) == AR) {
+                log_error_doc(req);
+                fprintf(stderr, "Invalid range request \"%s\".\n", initial_str);
                 range_abort(req);
                 return 0;
             } else if ((fcode & ACTMASK2) == SR) {
+                if ((start == stop) && (start == ULONG_MAX)) {
+                    /* neither was specified, or they were very big. */
+                    log_error_doc(req);
+                    fprintf(stderr, "Invalid range request (neither start nor stop were specified).\n");
+                    range_abort(req);
+                    return 0;
+                }
                 range_add(req, start, stop);
                 start = 0;
                 stop = 0;
@@ -368,8 +404,8 @@ int main(int argc, char *argv[])
         c = parse_range(&req, buff);
         printf("parse_range returned %d\n", c);
         req.filesize = fake_size;
-        c = fixup_ranges(&req);
-        printf("fixup_ranges returned %d\n", c);
+        c = ranges_fixup(&req);
+        printf("ranges_fixup returned %d\n", c);
         reset_ranges(&req);
     }
     return 0;

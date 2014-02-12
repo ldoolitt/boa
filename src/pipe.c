@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: pipe.c,v 1.39.2.10 2003/01/14 05:30:05 jnelson Exp $*/
+/* $Id: pipe.c,v 1.39.2.12 2003/03/06 02:58:17 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -183,25 +183,33 @@ int io_shuffle_sendfile(request * req)
     if (bytes_to_write > system_bufsize)
         bytes_to_write = system_bufsize;
 
-  retrysendfile:
-    bytes_written = sendfile(req->fd, req->data_fd, &(req->filepos), bytes_to_write);
-    if (bytes_written <= 0) {
-        if (bytes_written == 0)
-            return -1;
-        if (errno == EWOULDBLOCK || errno == EAGAIN)
-            return -1;          /* request blocked at the pipe level, but keep going */
-        else if (errno == EINTR)
-            goto retrysendfile;
-        else {
-            req->status = DEAD;
-            if (errno != EPIPE && errno != ECONNRESET) {
-                send_r_error(req);  /* maybe superfluous */
-                log_error_doc(req);
-                perror("sendfile write");
+retrysendfile:
+    if (bytes_to_write == 0) {
+        /* shouldn't get here, but... */
+        bytes_written = 0;
+    } else {
+        bytes_written = sendfile(req->fd, req->data_fd, &(req->filepos), bytes_to_write);
+        if (bytes_written < 0) {
+            if (errno == EWOULDBLOCK || errno == EAGAIN) {
+                return -1;          /* request blocked at the pipe level, but keep going */
+            } else if (errno == EINTR) {
+                goto retrysendfile;
+            } else {
+                req->status = DEAD;
+#ifdef QUIET_DISCONNECT
+                if (1)
+#else
+                if (errno != EPIPE && errno != ECONNRESET)
+#endif
+                {
+                    send_r_error(req);  /* maybe superfluous */
+                    log_error_doc(req);
+                    perror("sendfile write");
+                }
             }
             return 0;
-        }
-    }
+        } /* bytes_written */
+    } /* bytes_to_write */
 
     /* sendfile automatically updates req->filepos,
      * don't touch!
@@ -210,7 +218,7 @@ int io_shuffle_sendfile(request * req)
     req->ranges->start += bytes_written;
     req->bytes_written += bytes_written;
 
-    if ((req->ranges->stop + 1 - req->ranges->start) == 0) {
+    if (req->ranges->stop + 1 == req->ranges->start) {
         return complete_response(req);
     }
     return 1;

@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: util.c,v 1.61.2.11 2003/02/19 03:05:28 jnelson Exp $ */
+/* $Id: util.c,v 1.61.2.12 2003/02/24 02:47:28 jnelson Exp $ */
 
 #include "boa.h"
 
@@ -166,7 +166,7 @@ int month2int(const char *monthname)
         return (1);
     case 'J':
         if (*++monthname == 'a')
-            return (0);
+            return 0;
         return (*++monthname == 'n' ? 5 : 6);
     case 'M':
         return (*(monthname + 2) == 'r' ? 2 : 4);

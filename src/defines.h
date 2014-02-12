@@ -19,7 +19,7 @@
  *
  */
 
-/* $Id: defines.h,v 1.107.2.29 2003/02/22 22:11:31 jnelson Exp $*/
+/* $Id: defines.h,v 1.107.2.31 2003/03/07 03:06:21 jnelson Exp $*/
 
 #ifndef _DEFINES_H
 #define _DEFINES_H
@@ -29,6 +29,12 @@
 #ifndef SERVER_ROOT
 #define SERVER_ROOT "/etc/boa"
 #endif
+
+/* Uncomment the following #define if you don't want your logs
+ * filled with messages about client disconnects, etc...
+ */
+
+#define QUIET_DISCONNECT 1
 
 /***** Change this via the CGIPath configuration value in boa.conf *****/
 #define DEFAULT_PATH     "/bin:/usr/bin:/usr/local/bin"
@@ -70,7 +76,7 @@
 #endif
 
 #ifndef SERVER_VERSION
-#define SERVER_VERSION 				"Boa/0.94.14rc16"
+#define SERVER_VERSION 				"Boa/0.94.14rc17"
 #endif
 
 #define CGI_VERSION				"CGI/1.1"

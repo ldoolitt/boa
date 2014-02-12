@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: get.c,v 1.76.2.26 2003/02/19 04:10:16 jnelson Exp $*/
+/* $Id: get.c,v 1.76.2.28 2003/03/06 02:57:58 jnelson Exp $*/
 
 #include "boa.h"
 #include "access.h"
@@ -208,12 +208,10 @@ int init_get(request * req)
         }
         data_fd = get_dir(req, &statbuf); /* updates statbuf */
 
-        if (data_fd == -1)      /* couldn't do it */
+        if (data_fd < 0)      /* couldn't do it */
             return 0;           /* errors reported by get_dir */
         else if (data_fd == 0 || data_fd == 1)
             return data_fd;
-        else if (data_fd < 0)
-            return 0;
         /* else, data_fd contains the fd of the file... */
     }
 
@@ -245,6 +243,21 @@ int init_get(request * req)
     /* parse ranges now */
     /* we have to wait until req->filesize exists to fix them up */
     /* fixup handles handles communicating with the client */
+    /* ranges_fixup logs as appropriate, and sends
+     * send_r_invalid_range on error.
+     */
+
+    if (req->filesize == 0) {
+        if (req->http_version < HTTP11) {
+            send_r_request_ok(req);
+            close(data_fd);
+            return 0;
+        }
+        send_r_no_content(req);
+        close(data_fd);
+        return 0;
+    }
+
     if (req->ranges && !ranges_fixup(req)) {
         close(data_fd);
         return 0;
@@ -269,17 +282,6 @@ int init_get(request * req)
      return the entire entity using a 200 (OK) response.
      */
     /* IF we have range data *and* no if-range or if-range matches... */
-
-    if (req->filesize == 0) {
-        if (req->http_version < HTTP11) {
-            send_r_request_ok(req);
-            close(data_fd);
-            return 0;
-        }
-        send_r_no_content(req);
-        close(data_fd);
-        return 0;
-    }
 
 #ifdef MAX_FILE_MMAP
     if (req->filesize > MAX_FILE_MMAP) {
@@ -307,7 +309,10 @@ int init_get(request * req)
     if (!req->ranges) {
         req->ranges = range_pool_pop();
         req->ranges->start = 0;
-        req->ranges->stop = req->filesize - 1;
+        req->ranges->stop = -1;
+        if (!ranges_fixup(req)) {
+            return 0;
+        }
         send_r_request_ok(req);
     } else {
         /* FIXME: support if-range header here, by the following logic:
@@ -323,7 +328,10 @@ int init_get(request * req)
             ranges_reset(req);
             req->ranges = range_pool_pop();
             req->ranges->start = 0;
-            req->ranges->stop = req->filesize - 1;
+            req->ranges->stop = -1;
+            if (!ranges_fixup(req)) {
+                return 0;
+            }
             send_r_request_ok(req);
         }
         req->filepos = req->ranges->start;
@@ -424,7 +432,10 @@ int process_get(request * req)
         /* OK, SIGBUS **after** this point is very bad! */
     } else {
         /* sigbus! */
+        req->status = DEAD;
         log_error_doc(req);
+        fprintf(stderr, "%sGot SIGBUS in write(2)!\n",
+                get_commonlog_time());
         /* sending an error here is inappropriate
          * if we are here, the file is mmapped, and thus,
          * a content-length has been sent. If we send fewer bytes
@@ -433,9 +444,6 @@ int process_get(request * req)
          * of bytes (or a few too many) and the client
          * won't be the wiser.
          */
-        req->status = DEAD;
-        fprintf(stderr, "%sGot SIGBUS in write(2)!\n",
-                get_commonlog_time());
         return 0;
     }
 
@@ -444,7 +452,11 @@ int process_get(request * req)
             return -1;
         /* request blocked at the pipe level, but keep going */
         else {
+#ifdef QUIET_DISCONNECT
             if (errno != EPIPE) {
+#else
+            if (1) {
+#endif
                 log_error_doc(req);
                 /* Can generate lots of log entries, */
                 perror("write");

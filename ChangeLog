@@ -156,6 +156,16 @@
  * check for and complain about empty or NULL keys and values
    in the various hash function
  * change the maximum number of environment variables to 100 from 50
+ * as of 0.94.14rc17:
+ * #define QUIET_DISCONNECT to silence read and write errors to client
+ * when range requests are determined to be invalid, use log_error_doc
+ * make log messages when URI contains invalid characters or doesn't
+   start with a '/' less scary
+ * if creating a temporary file, or setting it to close-on-exec fails, 
+   send_r_error
+ * if key or value for an http header is invalid, log it.
+ * be more strict with range parsing
+ * handle 0-byte sendfile attempt better
 
 ** Changes from 0.94.12 to 0.94.13
  * Change many instances of log_error_mesg + exit to DIE macro

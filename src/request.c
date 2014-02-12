@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: request.c,v 1.112.2.37 2003/02/21 04:19:49 jnelson Exp $*/
+/* $Id: request.c,v 1.112.2.39 2003/03/10 03:18:54 jnelson Exp $*/
 
 #include "boa.h"
 #include <stddef.h>             /* for offsetof */
@@ -469,7 +469,6 @@ void process_requests(int server_sock)
                    Here, we may just be flushing headers.
                    We don't want to return 0 because we are not DONE
                    or DEAD */
-
                 retval = 1;
             }
         }
@@ -652,7 +651,7 @@ int process_logline(request * req)
             /* we don't need to log req->logline, because log_error_doc does */
             fprintf(stderr, "bogus absolute URI\n");
             send_r_bad_request(req);
-            return(0);
+            return 0;
         }
 
         /* OK.  The 'host' is at least 1 char long.
@@ -667,7 +666,7 @@ int process_logline(request * req)
             fprintf(stderr, "no URL in absolute URI: \"%s\"\n",
                     req->logline);
             send_r_bad_request(req);
-            return(0);
+            return 0;
         }
 
         /* we have http://X/ where X is not ' ' or '/' (or '\0') */
@@ -680,7 +679,7 @@ int process_logline(request * req)
             fprintf(stderr, "Error: corruption in absolute URI:"
                 "\"%s\".  This should not happen.\n", req->logline);
             send_r_bad_request(req);
-            return(0);
+            return 0;
         }
 
         /* copy the URI */
@@ -784,7 +783,7 @@ int process_header_end(request * req)
     /* Percent-decode request */
     if (unescape_uri(req->request_uri, &(req->query_string)) == 0) {
         log_error_doc(req);
-        fputs("Problem unescaping uri\n", stderr);
+        fputs("URI contains bogus characters\n", stderr);
         send_r_bad_request(req);
         return 0;
     }
@@ -793,7 +792,7 @@ int process_header_end(request * req)
     clean_pathname(req->request_uri);
 
     if (req->request_uri[0] != '/') {
-        log_error("request does not *start* with '/'\n");
+        log_error("URI does not begin with '/'\n");
         send_r_bad_request(req);
         return 0;
     }
@@ -830,22 +829,27 @@ int process_header_end(request * req)
     }
 
     if (translate_uri(req) == 0) { /* unescape, parse uri */
+        /* errors already logged */
         SQUASH_KA(req);
         return 0;               /* failure, close down */
     }
 
     if (req->method == M_POST) {
         req->post_data_fd = create_temporary_file(1, NULL, 0);
-        if (req->post_data_fd == 0)
-            return (0);
+        if (req->post_data_fd == 0) {
+            /* errors already logged */
+            send_r_error(req);
+            return 0;
+        }
         if (fcntl(req->post_data_fd, F_SETFD, 1) == -1) {
             log_error_doc(req);
             fputs("unable to set close-on-exec for req->post_data_fd!\n", stderr);
             close(req->post_data_fd);
             req->post_data_fd = 0;
-            return (0);
+            send_r_error(req);
+            return 0;
         }
-        return (1);             /* success */
+        return 1;             /* success */
     }
 
     if (req->cgi_type) {
@@ -876,10 +880,15 @@ int process_option_line(request * req)
 #endif
 
     value = strchr(line, ':');
-    if (value == NULL)
+    if (value == NULL) {
+        log_error_doc(req);
+        fprintf(stderr, "header \"%s\" does not contain ':'\n", line);
         return 0;
+    }
     *value++ = '\0';            /* overwrite the : */
     to_upper(line);             /* header types are case-insensitive */
+
+    /* the code below *does* catch '\0' due to the c = *value test */
     while ((c = *value) && (c == ' ' || c == '\t'))
         value++;
 
@@ -929,8 +938,10 @@ int process_option_line(request * req)
         /* Need agent and referer for logs */
         if (!memcmp(line, "REFERER", 8)) {
             req->header_referer = value;
-            if (!add_cgi_env(req, "REFERER", value, 1))
+            if (!add_cgi_env(req, "REFERER", value, 1)) {
+                /* errors already logged */
                 return 0;
+            }
         } else if (!memcmp(line, "RANGE", 6)) {
             if (req->ranges && req->ranges->stop == INT_MAX) {
                 /* there was an error parsing, ignore */
@@ -946,6 +957,7 @@ int process_option_line(request * req)
         if (!memcmp(line, "USER_AGENT", 11)) {
             req->header_user_agent = value;
             if (!add_cgi_env(req, "USER_AGENT", value, 1)) {
+                /* errors already logged */
                 return 0;
             }
             return 1;
