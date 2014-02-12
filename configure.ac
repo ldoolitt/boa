@@ -1,16 +1,18 @@
-dnl $Id: configure.in,v 1.1.2.16 2003/10/05 04:00:05 jnelson Exp $
-dnl Process this file with autoconf to produce a configure script.
+# Process this file with autoconf to produce a configure script.
 AC_INIT
-AC_CONFIG_SRCDIR([src/boa.c])
 
-dnl Make config.h
+AC_CONFIG_SRCDIR([src/boa.c])
 AC_CONFIG_HEADER(src/config.h)
 
 AC_CANONICAL_HOST
 
-dnl Checks for programs.
+# Checks for programs.
 AC_PROG_CC
+AC_PROG_INSTALL
 AC_PROG_CPP
+AC_PROG_MAKE_SET
+
+
 AC_C_VAR_FUNC
 
 CHECK_GNU_MAKE
@@ -24,36 +26,33 @@ fi
 AC_SUBST(ALLSOURCES)
 AC_SUBST(MAKE)
 
-dnl AC_MSG_RESULT($host) dnl i686-pc-linux-gnu
-dnl AC_MSG_RESULT($host_cpu) dnl i686
-dnl AC_MSG_RESULT($host_vendor) dnl pc
-dnl AC_MSG_RESULT($host_os) dnl linux-gnu
-dnl i386-unknown-freebsd4.2
-
-dnl Checks for libraries.
+# Checks for libraries.
 # AC_SEARCH_LIBS (function, search-libs, [action-if-found], [action-if-not-found], [other-libraries])
 AC_SEARCH_LIBS(socket, socket net)
 AC_SEARCH_LIBS(inet_aton, resolv)
 AC_SEARCH_LIBS(gethostname, nsl)
 AC_SEARCH_LIBS(gethostbyname, nsl)
 
-dnl Checks for header files.
+# Checks for header files.
 AC_HEADER_DIRENT
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
-AC_CHECK_HEADERS(fcntl.h sys/fcntl.h limits.h sys/time.h)
-AC_CHECK_HEADERS(getopt.h unistd.h)
+AC_CHECK_HEADERS(getopt.h fcntl.h unistd.h stddef.h stdlib.h string.h limits.h)
+AC_CHECK_HEADERS(sys/socket.h sys/time.h sys/fcntl.h sys/time.h)
+AC_CHECK_HEADERS(arpa/inet.h netdb.h netinet/in.h)
 
-dnl Checks for typedefs, structures, and compiler characteristics.
+# Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
+
 AC_TYPE_UID_T
 AC_TYPE_OFF_T
 AC_TYPE_PID_T
 AC_TYPE_SIZE_T
+
 AC_HEADER_TIME
 AC_STRUCT_TM
-dnl AC_CHECK_TYPE(sa_family_t,unsigned short int)
-dnl AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],[],[]) (includes, function-body, [action-if-found], [action-if-not-found])
+# AC_CHECK_TYPE(sa_family_t,unsigned short int)
+# AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],[],[]) (includes, function-body, [action-if-found], [action-if-not-found])
 AC_MSG_CHECKING(whether sa_family_t is defined)
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 #include <sys/types.h>
@@ -64,15 +63,23 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
  
 ])
 
-dnl Checks for library functions.
+# Checks for library functions.
+AC_FUNC_MALLOC
+AC_FUNC_REALLOC
+AC_FUNC_FORK
 AC_FUNC_FNMATCH
 AC_FUNC_MEMCMP
 AC_FUNC_MMAP
 AC_FUNC_SETVBUF_REVERSED
-AC_CHECK_FUNCS(getcwd strdup strstr strcspn strtol)
-AC_CHECK_FUNCS(gethostname gethostbyname socket inet_aton herror inet_addr)
+AC_CHECK_FUNCS(dup2)
+AC_CHECK_FUNCS(memchr memmove memset)
+AC_CHECK_FUNCS(strdup strstr strcspn strtol strcasecmp strchr)
+AC_CHECK_FUNCS(strerror strncasecmp strrchr strtol)
+AC_CHECK_FUNCS(getcwd gethostname gethostbyname socket inet_aton herror inet_addr)
 AC_CHECK_FUNCS(scandir alphasort)
-AC_CHECK_FUNCS(madvise)
+AC_CHECK_FUNCS(madvise munmap)
+AC_CHECK_FUNCS(tzset)
+
 
 AC_CHECK_STRUCT_FOR([
 #if TIME_WITH_SYS_TIME
@@ -282,8 +289,10 @@ POLL_OR_SELECT
 
 if test "$BOA_ASYNC_IO" = "poll"; then
   ASYNCIO_SOURCE="poll.c"
+  AC_CHECK_FUNCS(poll)
 else
   ASYNCIO_SOURCE="select.c"
+  AC_CHECK_FUNCS(select)
 fi
 AC_SUBST(ASYNCIO_SOURCE)
 
