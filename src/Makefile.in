@@ -1,0 +1,128 @@
+# $Id: Makefile.in,v 1.49 2001/11/04 17:51:53 jnelson Exp $
+GCC_FLAGS = -Wstrict-prototypes -Wpointer-arith -Wcast-align -Wcast-qual\
+  -Wtraditional\
+  -Wshadow\
+  -Wconversion\
+  -Waggregate-return\
+  -Wmissing-prototypes\
+  -Wnested-externs\
+  -Wall
+
+# Add -DNO_DAEMON if you do not want the server to fork upon launch
+# Add -lefence to LDFLAGS to link with ElectricFence
+# Add -pg to CFLAGS and LDFLAGS to get profiling output with gcc/gprof
+
+LDFLAGS = @LDFLAGS@
+LIBS = @LIBS@
+CFLAGS = @CFLAGS@ -I.
+
+# Change these if necessary
+
+YACC = @YACC@ 
+LEX = @LEX@ 
+CC = @CC@ 
+CPP = @CPP@
+
+SOURCES = alias.c boa.c buffer.c cgi.c cgi_header.c config.c escape.c \
+	get.c hash.c ip.c log.c mmap_cache.c pipe.c queue.c read.c \
+	request.c response.c signals.c util.c sublog.c 
+	
+OBJS = y.tab.o lex.yy.o ${SOURCES:.c=.o} timestamp.o
+
+.PHONY: clean mrclean distclean depend all dist
+
+all:	boa boa_indexer
+
+boa:	${OBJS}
+	${CC} -o $@ ${OBJS} ${LDFLAGS} ${LIBS}
+	
+boa_indexer:	index_dir.o escape.o
+	${CC} -o $@ index_dir.o escape.o ${LDFLAGS} ${LIBS}
+
+clean:
+	rm -f ${OBJS} boa core lex.yy.c y.tab.c y.tab.h boa_indexer cgi_header *~
+	
+distclean:	mrclean
+
+mrclean:	clean
+	rm -f config.status config.cache config.h Makefile config.log
+
+# parser dependencies
+
+y.tab.c y.tab.h:	boa_grammar.y
+	${YACC} -d $<
+
+lex.yy.c:	boa_lexer.l
+	${LEX} $<
+
+# depend stuff
+	
+.depend:
+	${CPP} -MM ${SOURCES} > .depend
+        
+depend:
+	-rm -f .depend
+	make .depend
+        
+-include .depend
+
+# timestamp
+
+timestamp.o:	${SOURCES} boa_grammar.y boa_lexer.l
+
+# tags
+TAGS:	${SOURCES}
+	ctags -o TAGS ${SOURCES} *.h
+
+# dist
+dist:
+	make clean
+	./makedist.sh
+
+# tests
+
+SOCKET = socket localhost 80
+ECHO = /bin/echo
+
+.PHONY: test dne cgi_bin dir normal
+
+test:	dne cgi_bin dir normal
+
+dne:
+	${ECHO} 'GET /file_that_does_not_exit HTTP/1.0\n\n' | ${SOCKET}
+	${ECHO} 'GET /file_that_does_not_exit\n' | ${SOCKET}
+	${ECHO} 'HEAD /file_that_does_not_exit HTTP/1.0\n\n' | ${SOCKET}
+	${ECHO} 'HEAD /file_that_does_not_exit\n' | ${SOCKET}
+
+cgi_bin:
+	${ECHO} 'GET /cgi-bin/cgi-test.cgi HTTP/1.0\n\n' | ${SOCKET}
+	${ECHO} 'GET /cgi-bin/cgi-test.cgi\n' | ${SOCKET}
+	${ECHO} 'HEAD /cgi-bin/cgi-test.cgi HTTP/1.0\n\n' | ${SOCKET}
+	${ECHO} 'HEAD /cgi-bin/cgi-test.cgi\n' | ${SOCKET}
+
+DIR = /doc/
+
+dir:
+	${ECHO} 'GET ${DIR} HTTP/1.0\n\n' | ${SOCKET}
+	${ECHO} 'GET ${DIR}\n' | ${SOCKET}
+	${ECHO} 'HEAD ${DIR} HTTP/1.0\n\n' | ${SOCKET}
+	${ECHO} 'HEAD ${DIR}\n' | ${SOCKET}
+
+NORMAL = /test_file.gz
+
+normal:
+	${ECHO} 'GET ${NORMAL} HTTP/1.0\n\n' | ${SOCKET} | wc -c
+	${ECHO} 'GET ${NORMAL}\n' | ${SOCKET} | wc -c
+	${ECHO} 'HEAD ${NORMAL} HTTP/1.0\n\n' | ${SOCKET}
+	${ECHO} 'HEAD ${NORMAL}' | ${SOCKET}
+
+GZ = /test_file
+
+# Note: to test automatic gunzipping a file named "test_file.gz" must be in
+# the document root.
+
+gz:	
+	${ECHO} 'GET ${GZ} HTTP/1.0\n\n' | ${SOCKET} | wc -c
+	${ECHO} 'GET ${GZ}\n' | ${SOCKET} | wc -c
+	${ECHO} 'HEAD ${GZ} HTTP/1.0\n\n' | ${SOCKET}
+	${ECHO} 'HEAD ${GZ}\n' | ${SOCKET}
