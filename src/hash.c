@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: hash.c,v 1.14 2002/02/16 02:17:39 jnelson Exp $*/
+/* $Id: hash.c,v 1.14.4.4 2002/07/30 03:59:26 jnelson Exp $*/
 
 #include "boa.h"
 #include "parse.h"
@@ -138,7 +138,7 @@ static unsigned djb2_hash(char *str)
 void add_mime_type(char *extension, char *type)
 {
     unsigned int hash;
-    hash_struct *current;
+    hash_struct *current, *next;
 
     if (!extension)
         return;
@@ -147,28 +147,32 @@ void add_mime_type(char *extension, char *type)
 
     current = mime_hashtable[hash];
 
+    while (current) {
+        if (!strcmp(current->key, extension))
+            return;         /* don't add extension twice */
+        if (current->next)
+            current = current->next;
+        else
+            break;
+    }
+
+    /* if here, we need to add a new one */
+    next = (hash_struct *) malloc(sizeof (hash_struct));
+    if (!next) {
+        DIE("malloc of hash_struct failed!");
+    }
+    next->key = strdup(extension);
+    if (!next->key)
+        DIE("malloc of hash_struct->key failed!");
+    next->value = strdup(type);
+    if (!next->value)
+        DIE("malloc of hash_struct->value failed!");
+    next->next = NULL;
+
     if (!current) {
-        mime_hashtable[hash] =
-            (hash_struct *) malloc(sizeof (hash_struct));
-        mime_hashtable[hash]->key = strdup(extension);
-        mime_hashtable[hash]->value = strdup(type);
-        mime_hashtable[hash]->next = NULL;
+        mime_hashtable[hash] = next;
     } else {
-        while (current) {
-            if (!strcmp(current->key, extension))
-                return;         /* don't add extension twice */
-            if (current->next)
-                current = current->next;
-            else
-                break;
-        }
-
-        current->next = (hash_struct *) malloc(sizeof (hash_struct));
-        current = current->next;
-
-        current->key = strdup(extension);
-        current->value = strdup(type);
-        current->next = NULL;
+        current->next = next;
     }
 }
 
@@ -264,7 +268,7 @@ char *get_home_dir(char *name)
 {
     struct passwd *passwdbuf;
 
-    hash_struct *current, *trailer;
+    hash_struct *current, *next;
     unsigned int hash;
 
     /* first check hash table -- if username is less than four characters,
@@ -272,47 +276,47 @@ char *get_home_dir(char *name)
 
     hash = get_homedir_hash_value(name);
 
-    current = passwd_hashtable[hash];
-
-    if (!current) {             /* definite miss */
-        passwdbuf = getpwnam(name);
-
-        if (!passwdbuf)         /* does not exist */
-            return NULL;
-
-        passwd_hashtable[hash] =
-            (hash_struct *) malloc(sizeof (hash_struct));
-
-        passwd_hashtable[hash]->key = strdup(name);
-        passwd_hashtable[hash]->value = strdup(passwdbuf->pw_dir);
-        passwd_hashtable[hash]->next = NULL;
-        return passwd_hashtable[hash]->value;
-    }
-    while (current) {
+    for(current = passwd_hashtable[hash];current;current = current->next) {
         if (!strcmp(current->key, name)) /* hit */
             return current->value;
-
-        trailer = current;
-        current = current->next;
+        if (!current->next)
+            break;
     }
 
-    /* not in hash table -- let's look it up */
+    /* if here, we have to add a new one */
 
     passwdbuf = getpwnam(name);
 
-    if (!passwdbuf)             /* does not exist */
+    if (!passwdbuf)         /* does not exist */
         return NULL;
 
-    /* exists -- have to add to hashtable */
+    next = (hash_struct *) malloc(sizeof (hash_struct));
+    if (!next) {
+        WARN("malloc of hash_struct for passwd_hashtable failed!");
+        return NULL;
+    }
 
-    trailer->next = (hash_struct *) malloc(sizeof (hash_struct));
-    current = trailer->next;
+    next->key = strdup(name);
+    if (!next->key) {
+        WARN("malloc of passwd_hashtable[hash]->key failed!");
+        free(next);
+        return NULL;
+    }
+    next->value = strdup(passwdbuf->pw_dir);
+    if (!next->value) {
+        WARN("malloc of passwd_hashtable[hash]->value failed!");
+        free(next->key);
+        free(next);
+        return NULL;
+    }
+    next->next = NULL;
 
-    current->key = strdup(name);
-    current->value = strdup(passwdbuf->pw_dir);
-    current->next = NULL;
-
-    return current->value;
+    if (!current) {
+        passwd_hashtable[hash] = next;
+    } else {
+        current->next = next;
+    }
+    return next->value;
 }
 
 void dump_mime(void)
@@ -320,20 +324,18 @@ void dump_mime(void)
     int i;
     hash_struct *temp;
     for (i = 0; i < MIME_HASHTABLE_SIZE; ++i) { /* these limits OK? */
-        if (mime_hashtable[i]) {
-            temp = mime_hashtable[i];
-            while (temp) {
-                hash_struct *temp_next;
+        temp = mime_hashtable[i];
+        while (temp) {
+            hash_struct *temp_next;
 
-                temp_next = temp->next;
-                free(temp->key);
-                free(temp->value);
-                free(temp);
+            temp_next = temp->next;
+            free(temp->key);
+            free(temp->value);
+            free(temp);
 
-                temp = temp_next;
-            }
-            mime_hashtable[i] = NULL;
+            temp = temp_next;
         }
+        mime_hashtable[i] = NULL;
     }
 }
 
@@ -342,20 +344,18 @@ void dump_passwd(void)
     int i;
     hash_struct *temp;
     for (i = 0; i < PASSWD_HASHTABLE_SIZE; ++i) { /* these limits OK? */
-        if (passwd_hashtable[i]) {
-            temp = passwd_hashtable[i];
-            while (temp) {
-                hash_struct *temp_next;
+        temp = passwd_hashtable[i];
+        while (temp) {
+            hash_struct *temp_next;
 
-                temp_next = temp->next;
-                free(temp->key);
-                free(temp->value);
-                free(temp);
+            temp_next = temp->next;
+            free(temp->key);
+            free(temp->value);
+            free(temp);
 
-                temp = temp_next;
-            }
-            passwd_hashtable[i] = NULL;
+            temp = temp_next;
         }
+        passwd_hashtable[i] = NULL;
     }
 }
 
@@ -380,7 +380,6 @@ void show_hash_stats(void)
                     i, count);
 #endif
             total += count;
-            mime_hashtable[i] = NULL;
         }
     }
     log_error_time();
@@ -402,7 +401,6 @@ void show_hash_stats(void)
                     i, count);
 #endif
             total += count;
-            passwd_hashtable[i] = NULL;
         }
     }
 

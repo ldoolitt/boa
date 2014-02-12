@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: response.c,v 1.41 2002/03/24 22:49:04 jnelson Exp $*/
+/* $Id: response.c,v 1.41.2.1 2002/06/06 05:08:54 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -313,6 +313,10 @@ void send_r_service_unavailable(request * req) /* 503 */
         _body_len = strlen(body);
     if (!body_len)
         body_len = strdup(simple_itoa(_body_len));
+    if (!body_len) {
+        log_error_time();
+        perror("strdup of _body_len from simple_itoa");
+    }
 
 
     SQUASH_KA(req);
@@ -320,9 +324,12 @@ void send_r_service_unavailable(request * req) /* 503 */
     if (!req->simple) {
         req_write(req, "HTTP/1.0 503 Service Unavailable\r\n");
         print_http_headers(req);
-        req_write(req, "Content-Length: ");
-        req_write(req, body_len);
-        req_write(req, "\r\nContent-Type: " HTML "\r\n\r\n"); /* terminate header
+        if (body_len) {
+            req_write(req, "Content-Length: ");
+            req_write(req, body_len);
+            req_write(req, "\r\n");
+        }
+        req_write(req, "Content-Type: " HTML "\r\n\r\n"); /* terminate header
                                                                */
     }
     if (req->method != M_HEAD) {

@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: log.c,v 1.36 2002/03/24 22:34:57 jnelson Exp $*/
+/* $Id: log.c,v 1.36.2.3 2002/07/26 03:04:48 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -59,6 +59,27 @@ void open_logs(void)
 {
     int error_log;
 
+    /* if error_log_name is set, dup2 stderr to it */
+    /* otherwise, leave stderr alone */
+    /* we don't want to tie stderr to /dev/null */
+    if (error_log_name) {
+        /* open the log file */
+        if (!(error_log = open_gen_fd(error_log_name))) {
+            DIE("unable to open error log");
+        }
+
+        /* redirect stderr to error_log */
+        if (dup2(error_log, STDERR_FILENO) == -1) {
+            DIE("unable to dup2 the error log");
+        }
+        close(error_log);
+    }
+
+    /* set the close-on-exec to true */
+    if (fcntl(STDERR_FILENO, F_SETFD, 1) == -1) {
+        DIE("unable to fcntl the error log");
+    }
+
     if (access_log_name) {
         /* Used the "a" flag with fopen, but fopen_gen_fd builds that in
          * implicitly when used as a file, and "a" is incompatible with
@@ -83,46 +104,19 @@ void open_logs(void)
     if (cgi_log_name) {
         cgi_log_fd = open_gen_fd(cgi_log_name);
         if (cgi_log_fd == -1) {
-            log_error_mesg(__FILE__, __LINE__, "open cgi_log");
+            WARN("open cgi_log");
             free(cgi_log_name);
             cgi_log_name = NULL;
             cgi_log_fd = 0;
         } else {
             if (fcntl(cgi_log_fd, F_SETFD, 1) == -1) {
-                log_error_mesg(__FILE__, __LINE__,
-                               "unable to set close-on-exec flag for cgi_log");
+                WARN("unable to set close-on-exec flag for cgi_log");
                 close(cgi_log_fd);
                 cgi_log_fd = 0;
                 free(cgi_log_name);
                 cgi_log_name = NULL;
             }
         }
-    }
-
-    /* if error_log_name is set, dup2 stderr to it */
-    /* otherwise, leave stderr alone */
-    /* we don't want to tie stderr to /dev/null */
-    if (error_log_name) {
-        /* open the log file */
-        if (!(error_log = open_gen_fd(error_log_name))) {
-            log_error_mesg(__FILE__, __LINE__, "unable to open error log");
-            exit(errno);
-        }
-
-        /* redirect stderr to error_log */
-        if (dup2(error_log, STDERR_FILENO) == -1) {
-            log_error_mesg(__FILE__, __LINE__,
-                           "unable to dup2 the error log");
-            exit(errno);
-        }
-        close(error_log);
-    }
-
-    /* set the close-on-exec to true */
-    if (fcntl(STDERR_FILENO, F_SETFD, 1) == -1) {
-        log_error_mesg(__FILE__, __LINE__,
-                       "unable to fcntl the error log");
-        exit(errno);
     }
 }
 

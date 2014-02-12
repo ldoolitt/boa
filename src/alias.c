@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: alias.c,v 1.70 2002/04/06 04:45:55 jnelson Exp $ */
+/* $Id: alias.c,v 1.70.2.4 2002/07/28 02:46:52 jnelson Exp $ */
 
 #include "boa.h"
 
@@ -65,34 +65,30 @@ void add_alias(char *fakename, char *realname, int type)
 
     /* sanity checking */
     if (fakename == NULL || realname == NULL) {
-        log_error_mesg(__FILE__, __LINE__,
-                       "NULL values sent to add_alias");
-        exit(errno);
+        DIE("NULL values sent to add_alias");
     }
 
     fakelen = strlen(fakename);
     reallen = strlen(realname);
     if (fakelen == 0 || reallen == 0) {
-        log_error_mesg(__FILE__, __LINE__,
-                       "empty values sent to add_alias");
-        exit(1);
+        DIE("empty values sent to add_alias");
     }
 
     hash = get_alias_hash_value(fakename);
 
     old = alias_hashtable[hash];
 
-    if (old)
+    if (old) {
         while (old->next) {
             if (!strcmp(fakename, old->fakename)) /* don't add twice */
                 return;
             old = old->next;
         }
+    }
+
     new = (alias *) malloc(sizeof (alias));
     if (!new) {
-        log_error_mesg(__FILE__, __LINE__,
-                       "out of memory adding alias to hash");
-        exit(1);
+        DIE("out of memory adding alias to hash");
     }
 
     if (old)
@@ -101,13 +97,23 @@ void add_alias(char *fakename, char *realname, int type)
         alias_hashtable[hash] = new;
 
     new->fakename = strdup(fakename);
+    if (!new->fakename) {
+        DIE("failed strdup");
+    }
     new->fake_len = fakelen;
     /* check for "here" */
     if (realname[0] == '.' && realname[1] == '/') {
         new->realname = normalize_path(realname+2);
+        if (!new->realname) {
+            /* superfluous - normalize_path checks for NULL return values. */
+            DIE("normalize_path returned NULL");
+        }
         reallen = strlen(new->realname);
     } else {
         new->realname = strdup(realname);
+        if (!new->realname) {
+            DIE("strdup of realname failed");
+        }
     }
     new->real_len = reallen;
 
@@ -240,6 +246,11 @@ int translate_uri(request * req)
             return 0;
         } else {                /* Alias */
             req->pathname = strdup(buffer);
+            if (!req->pathname) {
+                send_r_error(req);
+                WARN("unable to strdup buffer onto req->pathname");
+                return 0;
+            }
             return 1;
         }
     }
@@ -324,6 +335,11 @@ int translate_uri(request * req)
      */
 
     req->pathname = strdup(buffer);
+    if (!req->pathname) {
+        WARN("Could not strdup buffer for req->pathname!");
+        send_r_error(req);
+        return 0;
+    }
 
     /* below we support cgis outside of a ScriptAlias */
     if (strcmp(CGI_MIME_TYPE, get_mime_type(buffer)) == 0) { /* cgi */
@@ -335,6 +351,11 @@ int translate_uri(request * req)
         /* FIXME */
         /* script_name could end up as /cgi-bin/bob/extra_path */
         req->script_name = strdup(req->request_uri);
+        if (!req->script_name) {
+            WARN("Could not strdup req->request_uri for req->script_name");
+            send_r_error(req);
+            return 0;
+        }
         if (req->simple)
             req->is_cgi = NPH;
         else
@@ -402,6 +423,10 @@ int init_script_alias(request * req, alias * current1, int uri_len)
      (in /cgi-bin/bob, start at the 'b' in bob */
     index = current1->real_len;
 
+    /* go to first and successive '/' and keep checking
+     * if it is a full pathname
+     * on success (stat (not lstat) of file is a *regular file*)
+     */
     do {
         c = pathname[++index];
         if (c == '/') {
@@ -429,6 +454,13 @@ int init_script_alias(request * req, alias * current1, int uri_len)
             }
         }
     } while (c != '\0');
+
+    req->script_name = strdup(req->request_uri);
+    if (!req->script_name) {
+        send_r_error(req);
+        WARN("unable to strdup req->request_uri for req->script_name");
+        return 0;
+    }
 
     if (c == '\0') {
         err = stat(pathname, &statbuf);
@@ -462,8 +494,19 @@ int init_script_alias(request * req, alias * current1, int uri_len)
         int path_len;
 
         req->path_info = strdup(pathname + index);
+        if (!req->path_info) {
+            send_r_error(req);
+            WARN("unable to strdup pathname + index for req->path_info");
+            return 0;
+        }
         pathname[index] = '\0'; /* strip path_info from path */
         path_len = strlen(req->path_info);
+        /* we need to fix script_name here */
+        /* index points into pathname, which is
+         * realname/cginame/foo
+         * and index points to the '/foo' part
+         */
+        req->script_name[strlen(req->script_name) - path_len] = '\0'; /* zap off the /foo part */
 
         /* now, we have to re-alias the extra path info....
            this sucks.
@@ -486,6 +529,11 @@ int init_script_alias(request * req, alias * current1, int uri_len)
                 strcpy(buffer + current->real_len,
                        &req->path_info[current->fake_len]);
                 req->path_translated = strdup(buffer);
+                if (!req->path_translated) {
+                    send_r_error(req);
+                    WARN("unable to strdup buffer for req->path_translated");
+                    return 0;
+                }
             }
             current = current->next;
         }
@@ -517,8 +565,8 @@ int init_script_alias(request * req, alias * current1, int uri_len)
 
                 req->path_translated = malloc(l1 + l2 + l3 + 2);
                 if (req->path_translated == NULL) {
-                    log_error_mesg(__FILE__, __LINE__,
-                                   "unable to malloc memory for req->path_translated");
+                    send_r_error(req);
+                    WARN("unable to malloc memory for req->path_translated");
                     return 0;
                 }
                 memcpy(req->path_translated, user_homedir, l1);
@@ -536,8 +584,8 @@ int init_script_alias(request * req, alias * current1, int uri_len)
 
             req->path_translated = malloc(l1 + l2 + 1);
             if (req->path_translated == NULL) {
-                log_error_mesg(__FILE__, __LINE__,
-                               "unable to malloc memory for req->path_translated");
+                send_r_error(req);
+                WARN("unable to malloc memory for req->path_translated");
                 return 0;
             }
             memcpy(req->path_translated, document_root, l1);
@@ -546,7 +594,11 @@ int init_script_alias(request * req, alias * current1, int uri_len)
     }
 
     req->pathname = strdup(pathname);
-    req->script_name = strdup(req->request_uri);
+    if (!req->pathname) {
+        send_r_error(req);
+        WARN("unable to strdup pathname for req->pathname");
+        return 0;
+    }
 
     return 1;
 }

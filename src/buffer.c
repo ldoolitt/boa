@@ -19,7 +19,7 @@
  *
  */
 
-/* $Id: buffer.c,v 1.10 2002/01/21 02:19:16 jnelson Exp $ */
+/* $Id: buffer.c,v 1.10.2.2 2002/07/26 03:03:44 jnelson Exp $ */
 
 #include "boa.h"
 #include "escape.h"
@@ -52,6 +52,11 @@ int req_write(request * req, char *msg)
     memcpy(req->buffer + req->buffer_end, msg, msg_len);
     req->buffer_end += msg_len;
     return req->buffer_end;
+}
+
+void reset_output_buffer(request *req)
+{
+    req->buffer_end = 0;
 }
 
 /*
@@ -234,8 +239,11 @@ char *escape_string(char *inp, char *buf)
     if (buf == NULL && max)
         buf = malloc(sizeof (char) * max + 1);
 
-    if (buf == NULL)
+    if (buf == NULL) {
+        log_error_time();
+        perror("malloc");
         return NULL;
+    }
 
     index = buf;
     while ((c = *inp++) && max > 0) {

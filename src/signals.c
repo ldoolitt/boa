@@ -21,13 +21,16 @@
  *
  */
 
-/* $Id: signals.c,v 1.37 2002/03/24 23:14:46 jnelson Exp $*/
+/* $Id: signals.c,v 1.37.2.2 2002/07/23 16:03:41 jnelson Exp $*/
 
 #include "boa.h"
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>           /* wait */
 #endif
 #include <signal.h>             /* signal */
+
+sigjmp_buf env;
+int handle_sigbus;
 
 void sigsegv(int);
 void sigbus(int);
@@ -101,8 +104,14 @@ void sigsegv(int dummy)
     abort();
 }
 
+extern sigjmp_buf env;
+extern int handle_sigbus;
+
 void sigbus(int dummy)
 {
+    if (handle_sigbus) {
+        longjmp(env, dummy);
+    }
     time(&current_time);
     log_error_time();
     fprintf(stderr, "caught SIGBUS, dumping core in %s\n", tempdir);

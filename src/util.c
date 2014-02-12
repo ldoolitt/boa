@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: util.c,v 1.61 2002/03/24 23:15:04 jnelson Exp $ */
+/* $Id: util.c,v 1.61.2.3 2002/07/07 23:22:18 jnelson Exp $ */
 
 #include "boa.h"
 
@@ -114,7 +114,7 @@ char *get_commonlog_time(void)
     a /= 6;
     *p-- = '0' + a % 10;
     *p-- = '0' + a / 10;
-    *p-- = (time_offset > 0) ? '-' : '+';
+    *p-- = (time_offset >= 0) ? '+' : '-';
     *p-- = ' ';
 
     a = t->tm_sec;
@@ -483,40 +483,42 @@ char * normalize_path(char *path)
     int len1, len2;
     char *endpath;
 
-    if (path[0] == '/')
-        return strdup(path);
+    if (path[0] == '/') {
+        endpath = strdup(path);
+    } else {
 
 #ifndef HAVE_GETCWD
-    perror("boa: getcwd() not defined. Aborting.");
-    exit(1);
+        perror("boa: getcwd() not defined. Aborting.");
+        exit(1);
 #endif
-    if (getcwd(dirbuf, DIRBUF_SIZE) == NULL) {
-        if (errno == ERANGE)
-            perror
-                ("boa: getcwd() failed - unable to get working directory. "
-                 "Aborting.");
-        else if (errno == EACCES)
-            perror("boa: getcwd() failed - No read access in current "
-                   "directory. Aborting.");
-        else
-            perror("boa: getcwd() failed - unknown error. Aborting.");
-        exit(1);
-    }
+        if (getcwd(dirbuf, DIRBUF_SIZE) == NULL) {
+            if (errno == ERANGE)
+                perror
+                    ("boa: getcwd() failed - unable to get working directory. "
+                     "Aborting.");
+            else if (errno == EACCES)
+                perror("boa: getcwd() failed - No read access in current "
+                       "directory. Aborting.");
+            else
+                perror("boa: getcwd() failed - unknown error. Aborting.");
+            exit(1);
+        }
 
-    /* OK, now the hard part. */
-    len1 = strlen(dirbuf);
-    len2 = strlen(path);
-    if (len1 + len2 > MAX_PATH_LENGTH * 2) {
-        perror("boa: eek. unable to normalize pathname");
-        exit(1);
-    }
-    if (strcmp(path,".") != 0) {
-        memcpy(dirbuf + len1, "/", 1);
-        memcpy(dirbuf + len1 + 1, path, len2 + 1);
-    }
-    /* fprintf(stderr, "boa: normalize gets \"%s\"\n", dirbuf); */
+        /* OK, now the hard part. */
+        len1 = strlen(dirbuf);
+        len2 = strlen(path);
+        if (len1 + len2 > MAX_PATH_LENGTH * 2) {
+            perror("boa: eek. unable to normalize pathname");
+            exit(1);
+        }
+        if (strcmp(path,".") != 0) {
+            memcpy(dirbuf + len1, "/", 1);
+            memcpy(dirbuf + len1 + 1, path, len2 + 1);
+        }
+        /* fprintf(stderr, "boa: normalize gets \"%s\"\n", dirbuf); */
 
-    endpath = strdup(dirbuf);
+        endpath = strdup(dirbuf);
+    }
 
     if (endpath == NULL) {
         fprintf(stderr,

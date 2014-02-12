@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.21 2002/03/02 19:02:43 jnelson Exp $
+dnl $Id: configure.in,v 1.21.2.5 2002/07/28 02:38:32 jnelson Exp $
 dnl Process this file with autoconf to produce a configure script.
 AC_INIT(boa.c)
 
@@ -22,7 +22,8 @@ dnl Checks for header files.
 AC_HEADER_DIRENT
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
-AC_CHECK_HEADERS(fcntl.h sys/fcntl.h limits.h sys/time.h unistd.h sys/select.h,, )
+AC_CHECK_HEADERS(fcntl.h sys/fcntl.h limits.h sys/time.h sys/select.h)
+AC_CHECK_HEADERS(getopt.h)
 
 dnl Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
@@ -32,12 +33,12 @@ AC_HEADER_TIME
 
 dnl Checks for library functions.
 AC_FUNC_SETVBUF_REVERSED
+AC_FUNC_MMAP
 AC_CHECK_FUNCS(getcwd strdup strstr)
 AC_CHECK_FUNCS(gethostname gethostbyname select socket inet_aton)
 AC_CHECK_FUNCS(scandir alphasort)
 
 AC_CHECK_STRUCT_FOR([
-
 #if TIME_WITH_SYS_TIME
 # include <sys/time.h>
 # include <time.h>

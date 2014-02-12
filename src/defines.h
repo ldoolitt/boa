@@ -19,7 +19,7 @@
  *
  */
 
-/* $Id: defines.h,v 1.107 2002/05/05 01:15:05 jnelson Exp $*/
+/* $Id: defines.h,v 1.107.2.2 2002/06/07 02:57:23 jnelson Exp $*/
 
 #ifndef _DEFINES_H
 #define _DEFINES_H
@@ -67,7 +67,7 @@
 #endif
 
 #ifndef SERVER_VERSION
-#define SERVER_VERSION 				"Boa/0.94.12"
+#define SERVER_VERSION 				"Boa/0.94.13"
 #endif
 
 #define CGI_VERSION				"CGI/1.1"
@@ -125,24 +125,6 @@
 #define M_LINK		6
 #define M_UNLINK	7
 
-/******************* ERRORS *****************/
-
-#define SERVER_ERROR		1
-#define OUT_OF_MEMORY		2
-#define NO_CREATE_SOCKET	3
-#define NO_FCNTL		4
-#define NO_SETSOCKOPT		5
-#define NO_BIND			6
-#define NO_LISTEN		7
-#define NO_SETGID		8
-#define NO_SETUID		9
-#define NO_OPEN_LOG		10
-#define SELECT			11
-#define GETPWUID		12
-#define INITGROUPS		13
-
-#define SHUTDOWN		15            /* do not change */
-
 /************** REQUEST STATUS (req->status) ***************/
 
 #define READ_HEADER             0
@@ -156,9 +138,6 @@
 #define PIPE_WRITE              8
 #define DONE			9
 #define DEAD                   10
-
-#define CLIENT_WRITABLE(status) (status==WRITE || status==PIPE_WRITE)
-#define CLIENT_READABLE(status) (status < BODY_WRITE)
 
 /************** CGI TYPE (req->is_cgi) ******************/
 
@@ -177,8 +156,6 @@
 #define KA_STOPPED     	1
 #define KA_ACTIVE      	2
 
-#define SQUASH_KA(req)	(req->keepalive=KA_STOPPED)
-
 /********* CGI STATUS CONSTANTS (req->cgi_status) *******/
 #define CGI_PARSE 1
 #define CGI_BUFFER 2
@@ -193,6 +170,9 @@
 
 #define MAX_FILE_MMAP 100 * 1024 /* 100K */
 
+/***************** USEFUL MACROS ************************/
+
+#define SQUASH_KA(req)	(req->keepalive=KA_STOPPED)
 
 #define BOA_FD_SET(fd, where) { FD_SET(fd, where); \
     if (fd > max_fd) max_fd = fd; \
@@ -200,8 +180,9 @@
 
 /* If and when everyone has a modern gcc or other near-C99 compiler,
  * change these to static inline functions. Also note that since
- * we never fuss with O_APPEND append or O_ASYNC, we don't have
- * to perform an extra system call to F_GETFL first. */
+ * we never fuss with O_APPEND append or O_ASYNC, we shouldn't have
+ * to perform an extra system call to F_GETFL first.
+ */
 
 #ifdef BOA_USE_GETFL
 #define set_block_fd(fd)    real_set_block_fd(fd)
@@ -210,5 +191,8 @@
 #define set_block_fd(fd)    fcntl(fd, F_SETFL, 0)
 #define set_nonblock_fd(fd) fcntl(fd, F_SETFL, NOBLOCK)
 #endif
+
+#define DIE(mesg) log_error_mesg(__FILE__, __LINE__, mesg), exit(1)
+#define WARN(mesg) log_error_mesg(__FILE__, __LINE__, mesg)
 
 #endif

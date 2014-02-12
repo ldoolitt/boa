@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: select.c,v 1.1 2002/03/01 02:44:18 jnelson Exp $*/
+/* $Id: select.c,v 1.1.2.2 2002/07/23 15:54:52 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -82,10 +82,8 @@ void select_loop(int server_s)
             if (errno == EINTR)
                 continue;   /* while(1) */
             else if (errno != EBADF) {
-                log_error_mesg(__FILE__, __LINE__, "select");
-                exit(errno);
+                DIE("select");
             }
-
         }
 
         time(&current_time);
@@ -112,9 +110,9 @@ void select_loop(int server_s)
 
 static void fdset_update(void)
 {
-    request *current = request_block, *next;
+    request *current, *next;
 
-    while (current) {
+    for(current = request_block;current;current = next) {
         time_t time_since = current_time - current->time_last;
         next = current->next;
 
@@ -130,7 +128,7 @@ static void fdset_update(void)
             fputs("connection timed out\n", stderr);
             current->status = DEAD;
         }
-        if (current->buffer_end) {
+        if (current->buffer_end && current->status < DEAD) {
             if (FD_ISSET(current->fd, &block_write_fdset))
                 ready_request(current);
             else {

@@ -18,7 +18,7 @@
  *
  */
 
-/* $Id: config.c,v 1.31 2002/03/18 01:55:06 jnelson Exp $*/
+/* $Id: config.c,v 1.31.2.3 2002/07/26 03:04:29 jnelson Exp $*/
 
 #include "boa.h"
 #include "y.tab.h"
@@ -40,6 +40,7 @@ char *server_name;
 char *server_admin;
 char *server_ip;
 int virtualhost;
+long int max_connections;
 
 char *document_root;
 char *user_dir;
@@ -114,6 +115,7 @@ struct ccommand clist[] = {
     {"Alias", S2A, c_add_alias, &alias_number},
     {"SinglePostLimit", S1A, c_set_int, &single_post_limit},
     {"CGIPath", S1A, c_set_string, &cgi_path},
+    {"MaxConnections", S1A, c_set_int, &max_connections},
 };
 
 static void c_set_user(char *v1, char *v2, void *t)
@@ -130,9 +132,9 @@ static void c_set_user(char *v1, char *v2, void *t)
     } else {
         passwdbuf = getpwnam(v1);
         if (!passwdbuf) {
-            fprintf(stderr, "No such user: %s\n", v1);
             if (current_uid)
                 return;
+            fprintf(stderr, "No such user: %s\n", v1);
             exit(1);
         }
         server_uid = passwdbuf->pw_uid;
@@ -154,9 +156,9 @@ static void c_set_group(char *v1, char *v2, void *t)
     } else {
         groupbuf = getgrnam(v1);
         if (!groupbuf) {
-            fprintf(stderr, "No such group: %s\n", v1);
             if (current_uid)
                 return;
+            fprintf(stderr, "No such group: %s\n", v1);
             exit(1);
         }
         server_gid = groupbuf->gr_gid;
@@ -175,6 +177,9 @@ static void c_set_string(char *v1, char *v2, void *t)
         if (s)
             free(s);
         *(char **) t = strdup(v1);
+        if (!*(char **) t) {
+            DIE("Unable to strdup in c_set_string");
+        }
         DBG(printf("done.\n");
             )
     } else {

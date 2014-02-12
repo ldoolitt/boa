@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: boa.h,v 1.63 2002/03/24 23:14:30 jnelson Exp $*/
+/* $Id: boa.h,v 1.63.2.2 2002/07/26 03:03:44 jnelson Exp $*/
 
 #ifndef _BOA_H
 #define _BOA_H
@@ -36,6 +36,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <limits.h>             /* OPEN_MAX */
+#include <setjmp.h>
 
 #include <netdb.h>
 #include <netinet/in.h>
@@ -51,7 +52,6 @@
 #include "globals.h"
 
 /* alias */
-
 void add_alias(char *fakename, char *realname, int script);
 int translate_uri(request * req);
 int init_script_alias(request * req, alias * current, int uri_len);
@@ -163,6 +163,7 @@ int real_set_nonblock_fd(int fd);
 
 /* buffer */
 int req_write(request * req, char *msg);
+void reset_output_buffer(request *req);
 int req_write_escape_http(request * req, char *msg);
 int req_write_escape_html(request * req, char *msg);
 int req_flush(request * req);

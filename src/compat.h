@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: compat.h,v 1.18 2002/03/24 22:29:29 jnelson Exp $*/
+/* $Id: compat.h,v 1.18.2.1 2002/06/06 05:02:28 jnelson Exp $*/
 
 #ifndef _COMPAT_H
 #define _COMPAT_H
@@ -131,6 +131,10 @@ char *strdup(char *s);
 #ifdef HAVE_LIBDMALLOC
 #define DMALLOC_FUNC_CHECK
 #include <dmalloc.h>
+#endif
+
+#ifdef HAVE_GETOPT_H
+#include <getopt.h>
 #endif
 
 #endif

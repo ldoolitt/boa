@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: cgi.c,v 1.83 2002/03/24 23:14:30 jnelson Exp $ */
+/* $Id: cgi.c,v 1.83.2.3 2002/07/23 15:49:54 jnelson Exp $ */
 
 #include "boa.h"
 
@@ -62,6 +62,7 @@ void create_common_env()
     common_cgi_env[index++] = env_gen_extra("SERVER_SOFTWARE", SERVER_VERSION, 0);
     common_cgi_env[index++] = env_gen_extra("SERVER_NAME", server_name, 0);
     common_cgi_env[index++] = env_gen_extra("GATEWAY_INTERFACE", CGI_VERSION, 0);
+
     common_cgi_env[index++] =
         env_gen_extra("SERVER_PORT", simple_itoa(server_port), 0);
 
@@ -126,7 +127,7 @@ static char *env_gen_extra(const char *key, const char *value, int extra)
         *(result + extra + key_len + value_len + 1) = '\0';
     } else {
         log_error_time();
-        log_error_mesg(__FILE__, __LINE__, "not enough memory for env_gen_extra! Not fatal.\n");
+        perror("malloc");
         log_error_time();
         fprintf(stderr,
                 "tried to allocate (key=value) extra=%d: %s=%s\n",
@@ -210,7 +211,9 @@ int complete_env(request * req)
         my_add_cgi_env(req, "REQUEST_METHOD", w);
     }
 
+    my_add_cgi_env(req, "SERVER_ADDR", req->local_ip_addr);
     my_add_cgi_env(req, "SERVER_PROTOCOL", req->http_version);
+    my_add_cgi_env(req, "REQUEST_URI", req->request_uri);
 
     if (req->path_info)
         my_add_cgi_env(req, "PATH_INFO", req->path_info);
@@ -315,6 +318,9 @@ void create_argv(request * req, char **aargv)
     if (q && !strchr(q, '=')) {
         /* we have an 'index' style */
         q = strdup(q);
+        if (!q) {
+            WARN("unable to strdup 'q' in create_argv!");
+        }
         for (aargc = 1; q && (aargc < CGI_ARGC_MAX);) {
             r = q;
             /* for an index-style CGI, + is used to seperate arguments
@@ -390,7 +396,10 @@ int init_cgi(request * req)
         }
     }
 
-    if ((child_pid = fork()) == -1) { /* fork unsuccessful */
+    child_pid = fork();
+    switch(child_pid) {
+    case -1:
+        /* fork unsuccessful */
         log_error_time();
         perror("fork");
 
@@ -403,13 +412,17 @@ int init_cgi(request * req)
            for NPH and CGI, but not for GUNZIP.  Fix that. */
         /* i'd like to send_r_error, but.... */
         return 0;
-    }
-    /* if here, fork was successful */
-
-    if (!child_pid) {           /* 0 == child */
+        break;
+    case 0:
+        /* child */
         if (req->is_cgi == CGI || req->is_cgi == NPH) {
             char *foo = strdup(req->pathname);
             char *c;
+
+            if (!foo) {
+                WARN("unable to strdup pathname for req->pathname");
+                _exit(1);
+            }
             c = strrchr(foo, '/');
             if (c) {
                 ++c;
@@ -496,44 +509,48 @@ int init_cgi(request * req)
 #endif
         }
         /* execve failed */
-        log_error_mesg(__FILE__, __LINE__, req->pathname);
+        WARN(req->pathname);
         _exit(1);
+        break;
+
+    default:
+        /* parent */
+        /* if here, fork was successful */
+        if (verbose_cgi_logs) {
+            log_error_time();
+            fprintf(stderr, "Forked child \"%s\" pid %d\n",
+                    req->pathname, child_pid);
+        }
+
+        if (req->method == M_POST) {
+            close(req->post_data_fd); /* child closed it too */
+            req->post_data_fd = 0;
+        }
+
+        /* NPH, GUNZIP, etc... all go straight to the fd */
+        if (!use_pipes)
+            return 0;
+
+        close(pipes[1]);
+        req->data_fd = pipes[0];
+
+        req->status = PIPE_READ;
+        if (req->is_cgi == CGI) {
+            req->cgi_status = CGI_PARSE; /* got to parse cgi header */
+            /* for cgi_header... I get half the buffer! */
+            req->header_line = req->header_end =
+                (req->buffer + BUFFER_SIZE / 2);
+        } else {
+            req->cgi_status = CGI_BUFFER;
+            /* I get all the buffer! */
+            req->header_line = req->header_end = req->buffer;
+        }
+
+        /* reset req->filepos for logging (it's used in pipe.c) */
+        /* still don't know why req->filesize might be reset though */
+        req->filepos = 0;
+        break;
     }
-
-    /* if here, fork was successful */
-    if (verbose_cgi_logs) {
-        log_error_time();
-        fprintf(stderr, "Forked child \"%s\" pid %d\n",
-                req->pathname, child_pid);
-    }
-
-    if (req->method == M_POST) {
-        close(req->post_data_fd); /* child closed it too */
-        req->post_data_fd = 0;
-    }
-
-    /* NPH, GUNZIP, etc... all go straight to the fd */
-    if (!use_pipes)
-        return 0;
-
-    close(pipes[1]);
-    req->data_fd = pipes[0];
-
-    req->status = PIPE_READ;
-    if (req->is_cgi == CGI) {
-        req->cgi_status = CGI_PARSE; /* got to parse cgi header */
-        /* for cgi_header... I get half the buffer! */
-        req->header_line = req->header_end =
-            (req->buffer + BUFFER_SIZE / 2);
-    } else {
-        req->cgi_status = CGI_BUFFER;
-        /* I get all the buffer! */
-        req->header_line = req->header_end = req->buffer;
-    }
-
-    /* reset req->filepos for logging (it's used in pipe.c) */
-    /* still don't know why req->filesize might be reset though */
-    req->filepos = 0;
 
     return 1;
 }

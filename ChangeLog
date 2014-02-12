@@ -1,3 +1,34 @@
+** Changes from 0.94.12 to 0.94.13
+ * Change many instances of log_error_mesg + exit to DIE macro
+ * Change all instance of log_error_mesg (without exit) to WARN macro
+ * do a much better job of checking return values from malloc and
+   especially strdup.
+ * check results of calling umask and getrlimit
+ * server_s is no longer a global int
+ * check results of fork via switch instead of if (fork())
+ * check for getopt.h and include it if found
+ * remove unused #defines, and add WARN macro, and replace
+   many calls to log_error_mesg(..) with WARN macro
+ * fix bug in get_commonlog_time where time_offset calculation was
+   the opposite of what it should be ('-' and '+' were swapped)
+ * fix compatability bug with old and newer versions of flex/yacc
+ * add check for AC_FUNC_MMAP to configure.in
+ * fix really lame thinko in normalize_path, which would prepend the 
+   results of earlier calls to results from later calls
+ * Add MaxConnections, a configuration directive which allows the
+   user to specify the maximum number of connections that Boa will
+   accept concurrently.
+ * add SERVER_ADDR and REQUEST_URI to environment of CGI
+ * handle SIGBUS during writes of data that has been memory mapped
+ * minor optimization in select.c that prevents DEAD requests from 
+   being added to the block set
+ * fix bug in CGI environment script_name - closes sf.net bug #576725
+ * make 'status' variable local to requests.c, not local to every file
+   by forgetting to declare 'extern' in globals.h :-|
+ * make getsockname non-fatal, and do it every time because we may 
+   need it for the CGI
+ * some minor refactoring optimizations in hash.c
+ 
 ** Changes from 0.94.11 to 0.94.12
  * Renamed Changelog ChangeLog, and moved up to top-level directory
  * Next 3 items due in part or whole thanks to 

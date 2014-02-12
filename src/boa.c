@@ -21,13 +21,12 @@
  *
  */
 
-/* $Id: boa.c,v 1.99 2002/03/24 22:22:26 jnelson Exp $*/
+/* $Id: boa.c,v 1.99.2.2 2002/07/23 15:50:29 jnelson Exp $*/
 
 #include "boa.h"
 #include <sys/resource.h>
 
 /* globals */
-int server_s;                   /* boa socket */
 int backlog = SO_MAXCONN;
 time_t start_time;
 
@@ -41,10 +40,9 @@ int pending_requests = 0;
 
 /* static to boa.c */
 static void fixup_server_root(void);
-static void create_server_socket(void);
+static int create_server_socket(void);
 static void drop_privs(void);
 
-int max_connections = 0;
 static int sock_opt = 1;
 static int do_fork = 1;
 int devnullfd = -1;
@@ -52,38 +50,43 @@ int devnullfd = -1;
 int main(int argc, char **argv)
 {
     int c;                      /* command line arg */
-    struct rlimit rl;
+    int server_s;                   /* boa socket */
 
     /* set umask to u+rw, u-x, go-rwx */
-    umask(~0600);
+    c = umask(~0600);
+    if (c == -1) {
+        perror("umask");
+        exit(1);
+    }
 
     devnullfd = open("/dev/null", 0);
 
     /* make STDIN and STDOUT point to /dev/null */
     if (devnullfd == -1) {
-        log_error_mesg(__FILE__, __LINE__, "can't open /dev/null");
-        exit(errno);
+        DIE("can't open /dev/null");
     }
 
     if (dup2(devnullfd, STDIN_FILENO) == -1) {
-        log_error_mesg(__FILE__, __LINE__,
-                       "can't dup2 /dev/null to STDIN_FILENO");
-        exit(errno);
+        DIE("can't dup2 /dev/null to STDIN_FILENO");
     }
 
     if (dup2(devnullfd, STDOUT_FILENO) == -1) {
-        log_error_mesg(__FILE__, __LINE__,
-                       "can't dup2 /dev/null to STDOUT_FILENO");
-        exit(errno);
+        DIE("can't dup2 /dev/null to STDOUT_FILENO");
     }
 
     /* but first, update timestamp, because log_error_time uses it */
-    time(&current_time);
+    (void) time(&current_time);
 
     while ((c = getopt(argc, argv, "c:r:d")) != -1) {
         switch (c) {
         case 'c':
+            if (server_root)
+                free(server_root);
             server_root = strdup(optarg);
+            if (!server_root) {
+                perror("strdup (for server_root)");
+                exit(1);
+            }
             break;
         case 'r':
             if (chdir(optarg) == -1) {
@@ -114,23 +117,44 @@ int main(int argc, char **argv)
     fixup_server_root();
     read_config_files();
     open_logs();
-    create_server_socket();
+    server_s = create_server_socket();
     init_signals();
     drop_privs();
     create_common_env();
     build_needs_escape();
 
+    if (max_connections < 1) {
+        struct rlimit rl;
+
+        /* has not been set explicitly */
+        c = getrlimit(RLIMIT_NOFILE, &rl);
+        if (c < 0) {
+            perror("getrlimit");
+            exit(1);
+        }
+        max_connections = rl.rlim_cur;
+    }
+
     /* background ourself */
     if (do_fork) {
-        if (fork())
+        switch(fork()) {
+        case -1:
+            /* error */
+            perror("fork");
+            exit(1);
+            break;
+        case 0:
+            /* child, success */
+            break;
+        default:
+            /* parent, success */
             exit(0);
+            break;
+        }
     }
 
     /* main loop */
     timestamp();
-
-    getrlimit(RLIMIT_NOFILE, &rl);
-    max_connections = rl.rlim_cur;
 
     status.requests = 0;
     status.errors = 0;
@@ -140,45 +164,41 @@ int main(int argc, char **argv)
     return 0;
 }
 
-static void create_server_socket(void)
+static int create_server_socket(void)
 {
-    if ((server_s = socket(SERVER_AF, SOCK_STREAM, IPPROTO_TCP)) == -1) {
-        log_error_mesg(__FILE__, __LINE__, "unable to create socket");
-        exit(errno);
+    int server_s;
+
+    server_s = socket(SERVER_AF, SOCK_STREAM, IPPROTO_TCP);
+    if (server_s == -1) {
+        DIE("unable to create socket");
     }
 
     /* server socket is nonblocking */
     if (set_nonblock_fd(server_s) == -1) {
-        log_error_mesg(__FILE__, __LINE__,
-                       "fcntl: unable to set server socket to nonblocking");
-        exit(errno);
+        DIE("fcntl: unable to set server socket to nonblocking");
     }
 
     /* close server socket on exec so cgi's can't write to it */
     if (fcntl(server_s, F_SETFD, 1) == -1) {
-        log_error_mesg(__FILE__, __LINE__,
-                       "can't set close-on-exec on server socket!");
-        exit(errno);
+        DIE("can't set close-on-exec on server socket!");
     }
 
     /* reuse socket addr */
     if ((setsockopt(server_s, SOL_SOCKET, SO_REUSEADDR, (void *) &sock_opt,
                     sizeof (sock_opt))) == -1) {
-        log_error_mesg(__FILE__, __LINE__, "setsockopt");
-        exit(errno);
+        DIE("setsockopt");
     }
 
     /* internet family-specific code encapsulated in bind_server()  */
     if (bind_server(server_s, server_ip) == -1) {
-        log_error_mesg(__FILE__, __LINE__, "unable to bind");
-        exit(errno);
+        DIE("unable to bind");
     }
 
     /* listen: large number just in case your kernel is nicely tweaked */
     if (listen(server_s, backlog) == -1) {
-        log_error_mesg(__FILE__, __LINE__, "unable to listen");
-        exit(errno);
+        DIE("unable to listen");
     }
+    return server_s;
 }
 
 static void drop_privs(void)
@@ -188,27 +208,22 @@ static void drop_privs(void)
         struct passwd *passwdbuf;
         passwdbuf = getpwuid(server_uid);
         if (passwdbuf == NULL) {
-            log_error_mesg(__FILE__, __LINE__, "getpwuid");
-            exit(errno);
+            DIE("getpwuid");
         }
         if (initgroups(passwdbuf->pw_name, passwdbuf->pw_gid) == -1) {
-            log_error_mesg(__FILE__, __LINE__, "initgroups");
-            exit(errno);
+            DIE("initgroups");
         }
         if (setgid(server_gid) == -1) {
-            log_error_mesg(__FILE__, __LINE__, "setgid");
-            exit(errno);
+            DIE("setgid");
         }
         if (setuid(server_uid) == -1) {
-            log_error_mesg(__FILE__, __LINE__, "setuid");
-            exit(errno);
+            DIE("setuid");
         }
         /* test for failed-but-return-was-successful setuid
          * http://www.securityportal.com/list-archive/bugtraq/2000/Jun/0101.html
          */
         if (setuid(0) != -1) {
-            log_error_mesg(__FILE__, __LINE__, "icky Linux kernel bug!");
-            exit(1);
+            DIE("icky Linux kernel bug!");
         }
     } else {
         if (server_gid || server_uid) {
@@ -236,6 +251,10 @@ static void fixup_server_root()
     if (!server_root) {
 #ifdef SERVER_ROOT
         server_root = strdup(SERVER_ROOT);
+        if (!server_root) {
+            perror("strdup (SERVER_ROOT)");
+            exit(1);
+        }
 #else
         fputs("boa: don't know where server root is.  Please #define "
               "SERVER_ROOT in boa.h\n"

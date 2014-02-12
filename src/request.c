@@ -20,12 +20,14 @@
  *
  */
 
-/* $Id: request.c,v 1.112 2002/03/24 22:39:19 jnelson Exp $*/
+/* $Id: request.c,v 1.112.2.3 2002/07/24 03:03:59 jnelson Exp $*/
 
 #include "boa.h"
 #include <stddef.h> /* for offsetof */
 
 int total_connections;
+struct status status;
+
 static int sockbufsize = SOCKETBUF_SIZE;
 
 /* function prototypes located in this file only */
@@ -49,9 +51,9 @@ request *new_request(void)
     } else {
         req = (request *) malloc(sizeof (request));
         if (!req) {
-            log_error_mesg(__FILE__, __LINE__,
-                           "out of memory allocating for new request structure");
-            exit(errno);
+            log_error_time();
+            perror("malloc for new request");
+            return NULL;
         }
     }
 
@@ -71,9 +73,10 @@ void get_request(int server_s)
 {
     int fd;                     /* socket */
     struct SOCKADDR remote_addr; /* address */
+    struct SOCKADDR salocal;
     int remote_addrlen = sizeof (struct SOCKADDR);
     request *conn;              /* connection */
-    int len;
+    size_t len;
     static int system_bufsize = 0; /* Default size of SNDBUF given by system */
 
     remote_addr.S_FAMILY = 0xdead;
@@ -83,14 +86,14 @@ void get_request(int server_s)
     if (fd == -1) {
         if (errno != EAGAIN && errno != EWOULDBLOCK)
             /* abnormal error */
-            log_error_mesg(__FILE__, __LINE__, "accept");
+            WARN("accept");
         else
             /* no requests */
             pending_requests = 0;
         return;
     }
     if (fd >= FD_SETSIZE) {
-        log_error_mesg(__FILE__, __LINE__, "Got fd >= FD_SETSIZE.");
+        WARN("Got fd >= FD_SETSIZE.");
         close(fd);
 	return;
     }
@@ -125,40 +128,38 @@ void get_request(int server_s)
 #ifdef REUSE_EACH_CLIENT_CONNECTION_SOCKET
     if ((setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void *) &sock_opt,
                     sizeof (sock_opt))) == -1) {
-        log_error_mesg(__FILE__, __LINE__,
-                       "setsockopt: unable to set SO_REUSEADDR");
-        exit(errno);
+        DIE("setsockopt: unable to set SO_REUSEADDR");
     }
 #endif
 
+    len = sizeof(salocal);
+
+    if (getsockname(fd, (struct sockaddr *) &salocal, &len) != 0) {
+        WARN("getsockname");
+        close(fd);
+        return;
+    }
+
     conn = new_request();
+    if (!conn) {
+        close(fd);
+        return;
+    }
     conn->fd = fd;
     conn->status = READ_HEADER;
     conn->header_line = conn->client_stream;
     conn->time_last = current_time;
     conn->kacount = ka_max;
 
-    /* fill in local_ip_addr if relevant */
-    if (virtualhost) {
-        struct SOCKADDR salocal;
-        int dummy = sizeof (salocal);
-        if (getsockname(conn->fd, (struct sockaddr *) &salocal, &dummy) ==
-            -1) {
-            log_error_mesg(__FILE__, __LINE__, "getsockname");
-            exit(errno);
-        }
-        ascii_sockaddr(&salocal, conn->local_ip_addr, NI_MAXHOST);
-    }
+    ascii_sockaddr(&salocal, conn->local_ip_addr, NI_MAXHOST);
 
     /* nonblocking socket */
     if (set_nonblock_fd(conn->fd) == -1)
-        log_error_mesg(__FILE__, __LINE__,
-                       "fcntl: unable to set new socket to non-block");
+        WARN("fcntl: unable to set new socket to non-block");
 
     /* set close on exec to true */
     if (fcntl(conn->fd, F_SETFD, 1) == -1)
-        log_error_mesg(__FILE__, __LINE__,
-                       "fctnl: unable to set close-on-exec for new socket");
+        WARN("fctnl: unable to set close-on-exec for new socket");
 
     /* Increase buffer size if we have to.
      * Only ask the system the buffer size on the first request,
@@ -175,7 +176,7 @@ void get_request(int server_s)
              */
             ;
         } else {
-            log_error_mesg(__FILE__, __LINE__, "getsockopt(SNDBUF)");
+            WARN("getsockopt(SNDBUF)");
             system_bufsize = 1;
         }
     }
@@ -183,8 +184,7 @@ void get_request(int server_s)
         if (setsockopt
             (conn->fd, SOL_SOCKET, SO_SNDBUF, (void *) &sockbufsize,
              sizeof (sockbufsize)) == -1) {
-            log_error_mesg(__FILE__, __LINE__,
-                           "setsockopt: unable to set socket buffer size");
+            WARN("setsockopt: unable to set socket buffer size");
 #ifdef DIE_ON_ERROR_TUNING_SNDBUF
             exit(errno);
 #endif
@@ -205,9 +205,7 @@ void get_request(int server_s)
         int one = 1;
         if (setsockopt(conn->fd, IPPROTO_TCP, TCP_NODELAY,
                        (void *) &one, sizeof (one)) == -1) {
-            log_error_mesg(__FILE__, __LINE__,
-                           "setsockopt: unable to set TCP_NODELAY");
-            exit(errno);
+            DIE("setsockopt: unable to set TCP_NODELAY");
         }
 
     }
@@ -287,6 +285,13 @@ static void free_request(request ** list_head_addr, request * req)
         int bytes_to_move;
 
         request *conn = new_request();
+        if (!conn) {
+            /* errors already reported */
+            enqueue(&request_free, req);
+            close(req->fd);
+            total_connections--;
+            return;
+        }
         conn->fd = req->fd;
         conn->status = READ_HEADER;
         conn->header_line = conn->client_stream;
@@ -314,46 +319,49 @@ static void free_request(request ** list_head_addr, request * req)
         }
         enqueue(&request_block, conn);
         BOA_FD_SET(conn->fd, &block_read_fdset);
-    } else {
-        /*
-         While debugging some weird errors, Jon Nelson learned that
-         some versions of Netscape Navigator break the
-         HTTP specification.
 
-         Some research on the issue brought up:
-
-         http://www.apache.org/docs/misc/known_client_problems.html
-
-         As quoted here:
-
-         "
-         Trailing CRLF on POSTs
-
-         This is a legacy issue. The CERN webserver required POST
-         data to have an extra CRLF following it. Thus many
-         clients send an extra CRLF that is not included in the
-         Content-Length of the request. Apache works around this
-         problem by eating any empty lines which appear before a
-         request.
-         "
-
-         Boa will (for now) hack around this stupid bug in Netscape
-         (and Internet Exploder)
-         by reading up to 32k after the connection is all but closed.
-         This should eliminate any remaining spurious crlf sent
-         by the client.
-
-         Building bugs *into* software to be compatable is
-         just plain wrong
-         */
-
-        if (req->method == M_POST) {
-            char buf[32768];
-            read(req->fd, buf, 32768);
-        }
-        close(req->fd);
-        total_connections--;
+        enqueue(&request_free, req);
+        return;
     }
+
+    /*
+     While debugging some weird errors, Jon Nelson learned that
+     some versions of Netscape Navigator break the
+     HTTP specification.
+
+     Some research on the issue brought up:
+
+     http://www.apache.org/docs/misc/known_client_problems.html
+
+     As quoted here:
+
+     "
+     Trailing CRLF on POSTs
+
+     This is a legacy issue. The CERN webserver required POST
+     data to have an extra CRLF following it. Thus many
+     clients send an extra CRLF that is not included in the
+     Content-Length of the request. Apache works around this
+     problem by eating any empty lines which appear before a
+     request.
+     "
+
+     Boa will (for now) hack around this stupid bug in Netscape
+     (and Internet Exploder)
+     by reading up to 32k after the connection is all but closed.
+     This should eliminate any remaining spurious crlf sent
+     by the client.
+
+     Building bugs *into* software to be compatable is
+     just plain wrong
+     */
+
+    if (req->method == M_POST) {
+        char buf[32768];
+        read(req->fd, buf, 32768);
+    }
+    close(req->fd);
+    total_connections--;
 
     enqueue(&request_free, req);
 

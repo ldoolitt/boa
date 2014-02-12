@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: get.c,v 1.76 2002/03/24 22:32:39 jnelson Exp $*/
+/* $Id: get.c,v 1.76.2.5 2002/07/26 03:05:59 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -41,7 +41,7 @@ int init_get(request * req)
 {
     int data_fd, saved_errno;
     struct stat statbuf;
-    int bytes;
+    volatile int bytes;
 
     data_fd = open(req->pathname, O_RDONLY);
     saved_errno = errno; /* might not get used */
@@ -63,6 +63,15 @@ int init_get(request * req)
             close(data_fd);
 
             req->response_status = R_REQUEST_OK;
+            if (req->pathname)
+                free(req->pathname);
+            req->pathname = strdup(gzip_pathname);
+            if (!req->pathname) {
+                log_error_time();
+                perror("strdup");
+                send_r_error(req);
+                return 0;
+            }
             if (!req->simple) {
                 req_write(req, "HTTP/1.0 200 OK-GUNZIP\r\n");
                 print_http_headers(req);
@@ -73,9 +82,7 @@ int init_get(request * req)
             }
             if (req->method == M_HEAD)
                 return 0;
-            if (req->pathname)
-                free(req->pathname);
-            req->pathname = strdup(gzip_pathname);
+
             return init_cgi(req);
         }
     }
@@ -191,7 +198,19 @@ int init_get(request * req)
         if (bytes > req->filesize)
             bytes = req->filesize;
 
-        memcpy(req->buffer + req->buffer_end, req->data_mem, bytes);
+        if (sigsetjmp(env, 1) == 0) {
+            handle_sigbus = 1;
+            memcpy(req->buffer + req->buffer_end, req->data_mem, bytes);
+            handle_sigbus = 0;
+            /* OK, SIGBUS **after** this point is very bad! */
+        } else {
+            /* sigbus! */
+            log_error_doc(req);
+            reset_output_buffer(req);
+            send_r_error(req);
+            fprintf(stderr, "%sGot SIGBUS in memcpy!\n", get_commonlog_time());
+            return 0;
+        }
         req->buffer_end += bytes;
         req->filepos += bytes;
         if (req->filesize == req->filepos) {
@@ -216,14 +235,35 @@ int init_get(request * req)
 
 int process_get(request * req)
 {
-    int bytes_written, bytes_to_write;
+    int bytes_written;
+    volatile int bytes_to_write;
 
     bytes_to_write = req->filesize - req->filepos;
     if (bytes_to_write > SOCKETBUF_SIZE)
         bytes_to_write = SOCKETBUF_SIZE;
 
-    bytes_written = write(req->fd, req->data_mem + req->filepos,
-                          bytes_to_write);
+
+    if (sigsetjmp(env, 1) == 0) {
+        handle_sigbus = 1;
+        bytes_written = write(req->fd, req->data_mem + req->filepos,
+                              bytes_to_write);
+        handle_sigbus = 0;
+        /* OK, SIGBUS **after** this point is very bad! */
+    } else {
+        /* sigbus! */
+        log_error_doc(req);
+        /* sending an error here is inappropriate
+         * if we are here, the file is mmapped, and thus,
+         * a content-length has been sent. If we send fewer bytes
+         * the client knows there has been a problem.
+         * We run the risk of accidentally sending the right number
+         * of bytes (or a few too many) and the client
+         * won't be the wiser.
+         */
+        req->status = DEAD;
+        fprintf(stderr, "%sGot SIGBUS in write(2)!\n", get_commonlog_time());
+        return 0;
+    }
 
     if (bytes_written < 0) {
         if (errno == EWOULDBLOCK || errno == EAGAIN)
@@ -300,6 +340,15 @@ int get_dir(request * req, struct stat *statbuf)
 
             req->response_status = R_REQUEST_OK;
             SQUASH_KA(req);
+            if (req->pathname)
+                free(req->pathname);
+            req->pathname = strdup(pathname_with_index);
+            if (!req->pathname) {
+                log_error_time();
+                perror("strdup");
+                send_r_error(req);
+                return 0;
+            }
             if (!req->simple) {
                 req_write(req, "HTTP/1.0 200 OK-GUNZIP\r\n");
                 print_http_headers(req);
@@ -311,9 +360,6 @@ int get_dir(request * req, struct stat *statbuf)
             }
             if (req->method == M_HEAD)
                 return 0;
-            if (req->pathname)
-                free(req->pathname);
-            req->pathname = strdup(pathname_with_index);
             return init_cgi(req);
         }
 #endif

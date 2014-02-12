@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: boa_lexer.l,v 1.13 1999/11/04 02:44:46 jon Exp $*/
+/* $Id: boa_lexer.l,v 1.13.2.1 2002/07/07 23:19:55 jnelson Exp $*/
 
 #include "y.tab.h"
 #include <stdlib.h>
@@ -46,7 +46,7 @@ char *string_buf_ptr;
 %s MIME
 /* Quoted string handling (almost) straight out of
    the flex 2.5 man page, April 1995 */
-%x str
+%x STR
 
 %%
 
@@ -65,10 +65,10 @@ char *string_buf_ptr;
 
 \"	{
 	string_buf_ptr = string_buf;
-	BEGIN(str);
+	BEGIN(STR);
 	}
 
-<str>{
+<STR>{
 \"	{ /* saw closing quote - all done */
 	BEGIN(INITIAL);
 	*string_buf_ptr = '\0';
@@ -115,7 +115,7 @@ char *string_buf_ptr;
 		qspush(*yptr++);
 	}
 }
-	/* End of <str> dependence */
+	/* End of <STR> dependence */
 \n		{ lineno++; }
 %%
 

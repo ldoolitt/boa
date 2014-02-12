@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: globals.h,v 1.65 2002/03/24 22:34:15 jnelson Exp $*/
+/* $Id: globals.h,v 1.65.2.3 2002/07/24 03:03:59 jnelson Exp $*/
 
 #ifndef _GLOBALS_H
 #define _GLOBALS_H
@@ -123,7 +123,7 @@ struct status {
     long errors;
 };
 
-struct status status;
+extern struct status status;
 
 extern char *optarg;            /* For getopt */
 extern FILE *yyin;              /* yacc input */
@@ -134,8 +134,6 @@ extern request *request_free;   /* first in free list */
 
 extern fd_set block_read_fdset; /* fds blocked on read */
 extern fd_set block_write_fdset; /* fds blocked on write */
-
-extern int sock_opt;            /* sock_opt = 1: for setsockopt */
 
 /* global server variables */
 
@@ -178,7 +176,7 @@ extern int sigterm_flag;
 extern time_t start_time;
 
 extern int pending_requests;
-extern int max_connections;
+extern long int max_connections;
 
 extern int verbose_cgi_logs;
 
@@ -188,5 +186,8 @@ extern time_t current_time;
 extern int virtualhost;
 
 extern int total_connections;
+
+extern sigjmp_buf env;
+extern int handle_sigbus;
 
 #endif
