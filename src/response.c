@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: response.c,v 1.41.2.12 2003/01/22 02:33:23 jnelson Exp $*/
+/* $Id: response.c,v 1.41.2.13 2003/11/26 05:10:48 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -118,14 +118,14 @@ void print_partial_content_continue(request * req)
 {
     static char msg[] = CRLF "--THIS_STRING_SEPARATES" CRLF;
 
+    if (req->numranges > 1) {
+        req_write(req, msg);
+    }
     print_content_type(req);
     print_content_range(req);
     req_write(req, "Content-Length: ");
     req_write(req, simple_itoa(req->ranges->stop - req->ranges->start + 1));
     req_write(req, "\r\n");
-    if (req->numranges > 1) {
-        req_write(req, msg);
-    }
 }
 
 void print_partial_content_done(request * req)
@@ -242,8 +242,8 @@ void send_r_partial_content(request * req)
     if (req->numranges > 1) {
         req_write(req, msg2);
     }
-    print_partial_content_continue(req);
     req_write(req, CRLF);
+    print_partial_content_continue(req);
 }
 
 

@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: pipe.c,v 1.39.2.12 2003/03/06 02:58:17 jnelson Exp $*/
+/* $Id: pipe.c,v 1.39.2.14 2003/08/16 18:55:21 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -148,7 +148,6 @@ int write_from_pipe(request * req)
             return 1;
         else {
             req->status = DEAD;
-            send_r_error(req);  /* maybe superfluous */
             log_error_doc(req);
             perror("pipe write");
             return 0;
@@ -197,12 +196,11 @@ retrysendfile:
             } else {
                 req->status = DEAD;
 #ifdef QUIET_DISCONNECT
-                if (1)
+                if (0)
 #else
                 if (errno != EPIPE && errno != ECONNRESET)
 #endif
                 {
-                    send_r_error(req);  /* maybe superfluous */
                     log_error_doc(req);
                     perror("sendfile write");
                 }
@@ -317,7 +315,6 @@ int io_shuffle(request * req)
             goto restartwrite;
         else {
             req->status = DEAD;
-            send_r_error(req);  /* maybe superfluous */
             log_error_doc(req);
             perror("ioshuffle write");
             return 0;

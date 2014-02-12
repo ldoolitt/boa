@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: cgi.c,v 1.83.2.20 2003/02/24 02:47:57 jnelson Exp $ */
+/* $Id: cgi.c,v 1.83.2.22 2003/10/05 04:15:29 jnelson Exp $ */
 
 #include "boa.h"
 
@@ -435,6 +435,7 @@ int init_cgi(request * req)
         break;
     case 0:
         /* child */
+        reset_signals();
 
         if (req->cgi_type == CGI || req->cgi_type == NPH) {
             char *c;
@@ -517,6 +518,67 @@ int init_cgi(request * req)
             dup2(req->post_data_fd, STDIN_FILENO);
             close(req->post_data_fd);
         }
+
+#ifdef USE_SETRLIMIT
+        /* setrlimit stuff.
+         * This is neat!
+         * RLIMIT_STACK    max stack size
+         * RLIMIT_CORE     max core file size
+         * RLIMIT_RSS      max resident set size
+         * RLIMIT_NPROC    max number of processes
+         * RLIMIT_NOFILE   max number of open files
+         * RLIMIT_MEMLOCK  max locked-in-memory address space
+         * RLIMIT_AS       address space (virtual memory) limit
+         *
+         * RLIMIT_CPU      CPU time in seconds
+         * RLIMIT_DATA     max data size
+         *
+         * Currently, we only limit the CPU time and the DATA segment
+         * We also "nice" the process.
+         *
+         * This section of code adapted from patches sent in by Steve Thompson
+         * (no email available)
+         */
+
+        {
+            struct rlimit rl;
+            int retval;
+
+            if (cgi_rlimit_cpu) {
+                rl.rlim_cur = rl.rlim_max = cgi_rlimit_cpu;
+                retval = setrlimit(RLIMIT_CPU, &rl);
+                if (retval == -1) {
+                    log_error_time();
+                    fprintf(stderr,
+                            "setrlimit(RLIMIT_CPU,%d): %s\n",
+                            rlimit_cpu, strerror(errno));
+                    _exit(1);
+                }
+            }
+
+            if (cgi_limit_data) {
+                rl.rlim_cur = rl.rlim_max = cgi_rlimit_data;
+                retval = setrlimit(RLIMIT_DATA, &rl);
+                if (retval == -1) {
+                    log_error_time();
+                    fprintf(stderr,
+                            "setrlimit(RLIMIT_DATA,%d): %s\n",
+                            rlimit_data, strerror(errno));
+                    _exit(1);
+                }
+            }
+
+            if (cgi_nice) {
+                retval = nice(cgi_nice);
+                if (retval == -1) {
+                    log_error_time();
+                    perror("nice");
+                    _exit(1);
+                }
+            }
+        }
+#endif
+
         umask(cgi_umask);       /* change umask *again* u=rwx,g=rxw,o= */
 
         /*

@@ -19,7 +19,7 @@
  *
  */
 
-/* $Id: buffer.c,v 1.10.2.6 2003/02/22 22:11:15 jnelson Exp $ */
+/* $Id: buffer.c,v 1.10.2.9 2003/09/10 04:04:37 jnelson Exp $ */
 
 #include "boa.h"
 #include "escape.h"
@@ -40,7 +40,7 @@ int req_write(request * req, const char *msg)
 
     msg_len = strlen(msg);
 
-    if (!msg_len || req->status == DEAD)
+    if (!msg_len || req->status > DONE)
         return req->buffer_end;
 
     if (req->buffer_end + msg_len > BUFFER_SIZE) {
@@ -210,7 +210,7 @@ int req_flush(request * req)
     unsigned bytes_to_write;
 
     bytes_to_write = req->buffer_end - req->buffer_start;
-    if (req->status == DEAD)
+    if (req->status > DONE)
         return -2;
 
     if (bytes_to_write) {
@@ -224,8 +224,14 @@ int req_flush(request * req)
                 return -1;      /* request blocked at the pipe level, but keep going */
             else {
                 req->buffer_start = req->buffer_end = 0;
-                if (errno != EPIPE)
-                    perror("buffer flush"); /* OK to disable if your logs get too big */
+                /* OK to disable if your logs get too big */
+#ifdef QUIET_DISCONNECT
+                if (errno != ECONNRESET && errno != EPIPE)
+#endif
+                {
+                    log_error_doc(req);
+                    perror("buffer flush");
+                }
                 req->status = DEAD;
                 req->buffer_end = 0;
                 return -2;
@@ -273,7 +279,7 @@ char *escape_string(const char *inp, char *buf)
     max = strlen(inp) * 3;
 
     if (buf == NULL && max)
-        buf = malloc(sizeof (char) * max + 1);
+        buf = malloc(sizeof (char) * (max + 1));
 
     if (buf == NULL) {
         log_error_time();

@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: boa.c,v 1.99.2.17 2003/02/02 05:02:19 jnelson Exp $*/
+/* $Id: boa.c,v 1.99.2.18 2003/10/05 03:42:19 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -29,6 +29,7 @@
 int backlog = SO_MAXCONN;
 time_t start_time;
 
+int debug_level = 0;
 int sighup_flag = 0;            /* 1 => signal has happened, needs attention */
 int sigchld_flag = 0;           /* 1 => signal has happened, needs attention */
 int sigalrm_flag = 0;           /* 1 => signal has happened, needs attention */
@@ -39,6 +40,8 @@ int pending_requests = 0;
 extern const char *config_file_name;
 
 /* static to boa.c */
+static void usage(const char *programname);
+static void parse_commandline(int argc, char *argv[]);
 static void fixup_server_root(void);
 static int create_server_socket(void);
 static void drop_privs(void);
@@ -46,15 +49,13 @@ static void drop_privs(void);
 static int sock_opt = 1;
 static int do_fork = 1;
 
-int main(int argc, char **argv)
+int main(int argc, char *argv[])
 {
-    int c;                      /* command line arg */
     int server_s;               /* boa socket */
     pid_t pid;
 
     /* set umask to u+rw, u-x, go-rwx */
-    c = umask(077);
-    if (c == -1) {
+    if (umask(077) < 0) {
         perror("umask");
         exit(1);
     }
@@ -78,47 +79,7 @@ int main(int argc, char **argv)
     /* but first, update timestamp, because log_error_time uses it */
     (void) time(&current_time);
 
-    while ((c = getopt(argc, argv, "c:df:r:")) != -1) {
-        switch (c) {
-        case 'c':
-            if (server_root)
-                free(server_root);
-            server_root = strdup(optarg);
-            if (!server_root) {
-                perror("strdup (for server_root)");
-                exit(1);
-            }
-            break;
-        case 'd':
-            do_fork = 0;
-            break;
-        case 'f':
-            config_file_name = optarg;
-            break;
-        case 'r':
-            if (chdir(optarg) == -1) {
-                log_error_time();
-                perror("chdir (to chroot)");
-                exit(1);
-            }
-            if (chroot(optarg) == -1) {
-                log_error_time();
-                perror("chroot");
-                exit(1);
-            }
-            if (chdir("/") == -1) {
-                log_error_time();
-                perror("chdir (after chroot)");
-                exit(1);
-            }
-            break;
-        default:
-            fprintf(stderr, "Usage: %s [-c serverroot] [-d] [-f configfile] [-r chroot]\n",
-                    argv[0]);
-            exit(1);
-        }
-    }
-
+    parse_commandline(argc,argv);
     fixup_server_root();
     read_config_files();
     open_logs();
@@ -170,6 +131,73 @@ int main(int argc, char **argv)
     start_time = current_time;
     loop(server_s);
     return 0;
+}
+
+static void usage(const char *programname)
+{
+    fprintf(stderr, "Usage: %s [-c serverroot] [-d] [-f configfile] [-r chroot]%s\n",
+	    programname,
+#ifndef DISABLE_DEBUG
+	    " [-l debug_level]"
+#else
+	    ""
+#endif
+	   );
+#ifndef DISABLE_DEBUG
+    print_debug_usage();
+#endif
+    exit(1);
+
+}
+
+static void parse_commandline(int argc, char *argv[])
+{
+    int c;                      /* command line arg */
+
+    while ((c = getopt(argc, argv, "c:dl:f:r:")) != -1) {
+	switch (c) {
+	case 'c':
+	    if (server_root)
+		free(server_root);
+	    server_root = strdup(optarg);
+	    if (!server_root) {
+		perror("strdup (for server_root)");
+		exit(1);
+	    }
+	    break;
+	case 'd':
+	    do_fork = 0;
+	    break;
+	case 'f':
+	    config_file_name = optarg;
+	    break;
+	case 'r':
+	    if (chdir(optarg) == -1) {
+		log_error_time();
+		perror("chdir (to chroot)");
+		exit(1);
+	    }
+	    if (chroot(optarg) == -1) {
+		log_error_time();
+		perror("chroot");
+		exit(1);
+	    }
+	    if (chdir("/") == -1) {
+		log_error_time();
+		perror("chdir (after chroot)");
+		exit(1);
+	    }
+	    break;
+#ifndef DISABLE_DEBUG
+	case 'l':
+	    parse_debug(optarg);
+	    break;
+#endif
+	default:
+	    usage(argv[0]);
+	    exit(1);
+	}
+    }
 }
 
 static int create_server_socket(void)

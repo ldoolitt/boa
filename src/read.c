@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: read.c,v 1.49.2.9 2003/03/07 03:06:42 jnelson Exp $*/
+/* $Id: read.c,v 1.49.2.11 2003/10/05 04:25:06 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -229,6 +229,7 @@ int read_header(request * req)
             log_error_doc(req);
             fputs("No space left in client stream buffer, closing\n",
                   stderr);
+            req->response_status = 400; 
             req->status = DEAD;
             return 0;
         }
@@ -243,12 +244,14 @@ int read_header(request * req)
                 return -1;
             log_error_doc(req);
             perror("header read"); /* don't need to save errno because log_error_doc does */
+            req->response_status = 400; 
             return 0;
         } else if (bytes == 0) {
 #ifndef QUIET_DISCONNECT
             log_error_doc(req);
             fputs("client unexpectedly closed connection.\n", stderr);
 #endif
+            req->response_status = 400;
             return 0;
         }
 
@@ -314,6 +317,7 @@ int read_body(request * req)
             return -1;
         } else {
             boa_perror(req, "read body");
+            req->response_status = 400;
             return 0;
         }
     } else if (bytes_read == 0) {

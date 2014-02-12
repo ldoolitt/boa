@@ -19,7 +19,7 @@
  *
  */
 
-/* $Id: defines.h,v 1.107.2.31 2003/03/07 03:06:21 jnelson Exp $*/
+/* $Id: defines.h,v 1.107.2.34 2003/10/05 03:36:51 jnelson Exp $*/
 
 #ifndef _DEFINES_H
 #define _DEFINES_H
@@ -34,7 +34,7 @@
  * filled with messages about client disconnects, etc...
  */
 
-#define QUIET_DISCONNECT 1
+/* #define QUIET_DISCONNECT 1 */
 
 /***** Change this via the CGIPath configuration value in boa.conf *****/
 #define DEFAULT_PATH     "/bin:/usr/bin:/usr/local/bin"
@@ -76,7 +76,7 @@
 #endif
 
 #ifndef SERVER_VERSION
-#define SERVER_VERSION 				"Boa/0.94.14rc17"
+#define SERVER_VERSION 				"Boa/0.94.14rc18"
 #endif
 
 #define CGI_VERSION				"CGI/1.1"
@@ -101,8 +101,8 @@
 
 /*************** POLL / SELECT MACROS *******************/
 #ifdef HAVE_POLL
-#define BOA_READ (POLLIN|POLLPRI)
-#define BOA_WRITE (POLLOUT)
+#define BOA_READ (POLLIN|POLLPRI|POLLHUP)
+#define BOA_WRITE (POLLOUT|POLLHUP)
 #define BOA_FD_SET(req, thefd,where) { struct pollfd *my_pfd = &pfds[pfd_len]; req->pollfd_id = pfd_len++; my_pfd->fd = thefd; my_pfd->events = where; }
 #define BOA_FD_CLR(req, fd, where) /* this doesn't do anything? */
 #else                           /* SELECT */
@@ -126,15 +126,42 @@
 #define set_nonblock_fd(fd) fcntl(fd, F_SETFL, NOBLOCK)
 #endif
 
+/********************* DEBUG STUFF ***********************/
+extern int debug_level;
+
+#ifdef DISABLE_DEBUG
+#define real_debug_level 0
+#else
+#define real_debug_level debug_level
+#endif
+
+#define DEBUG(foo)          if (real_debug_level & foo)
+
+#define DEBUG_ALIAS         (1<<0)
+#define DEBUG_CGI_OUTPUT    (1<<1)
+#define DEBUG_CGI_INPUT     (1<<2)
+#define DEBUG_CGI_ENV       (1<<3)
+#define DEBUG_HEADER_READ   (1<<4)
+#define DEBUG_PIPELINE      (1<<5)
+#define DEBUG_PLUGIN_ERRORS (1<<6)
+#define DEBUG_RANGE         (1<<7)
+#define DEBUG_CONFIG        (1<<8)
+#define DEBUG_BUFFER_IO     (1<<9)
+#define DEBUG_BODY_READ     (1<<10)
+#define DEBUG_MMAP_CACHE    (1<<11)
+#define DEBUG_REQUEST       (1<<12)
+#define DEBUG_HASH          (1<<13)
+
 /***************** USEFUL MACROS ************************/
 
 #define SQUASH_KA(req)	(req->keepalive=KA_STOPPED)
 
 #ifdef HAVE_FUNC
 #define WARN(mesg) log_error_mesg(__FILE__, __LINE__, __func__, mesg)
+#define DIE(mesg) log_error_mesg_fatal(__FILE__, __LINE__, __func__, mesg)
 #else
 #define WARN(mesg) log_error_mesg(__FILE__, __LINE__, mesg)
+#define DIE(mesg) log_error_mesg_fatal(__FILE__, __LINE__, mesg)
 #endif
-#define DIE(mesg) WARN(mesg), exit(1)
 
 #endif

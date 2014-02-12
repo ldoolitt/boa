@@ -18,7 +18,7 @@
  *
  */
 
-/* $Id: mmap_cache.c,v 1.9.2.3 2003/01/20 18:14:53 jnelson Exp $*/
+/* $Id: mmap_cache.c,v 1.9.2.5 2003/10/05 03:40:43 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -43,11 +43,11 @@ struct mmap_entry *find_mmap(int data_fd, struct stat *s)
             mmap_list[i].ino == s->st_ino &&
             mmap_list[i].len == s->st_size) {
             mmap_list[i].use_count++;
-#ifdef DEBUG
-            fprintf(stderr,
-                    "Old mmap_list entry %d use_count now %d (hash was %d)\n",
-                    i, mmap_list[i].use_count, start);
-#endif
+            DEBUG(DEBUG_MMAP_CACHE) {
+                fprintf(stderr,
+                        "Old mmap_list entry %d use_count now %d (hash was %d)\n",
+                        i, mmap_list[i].use_count, start);
+            }
             return mmap_list + i;
         }
         mmap_list_hash_bounces++;
@@ -89,21 +89,25 @@ struct mmap_entry *find_mmap(int data_fd, struct stat *s)
     }
 
 #ifdef HAVE_MADVISE
-    start = madvise(m, s->st_size, MADV_SEQUENTIAL);
-    if (start == -1) {
-        int saved_errno = errno;
-        log_error_time();
-        fprintf(stderr, "Unable to mmap file: ");
-        errno = saved_errno;
-        perror("mmap");
-        munmap(m, s->st_size);
-        return NULL;
+    {
+        int mret;
+
+        mret = madvise(m, s->st_size, MADV_SEQUENTIAL);
+        if (mret == -1) {
+            int saved_errno = errno;
+            log_error_time();
+            fprintf(stderr, "Unable to madvise file: ");
+            errno = saved_errno;
+            perror("madvise");
+            munmap(m, s->st_size);
+            return NULL;
+        }
     }
 #endif
 
-#ifdef DEBUG
-    fprintf(stderr, "New mmap_list entry %d (hash was %d)\n", i, h);
-#endif
+    DEBUG(DEBUG_MMAP_CACHE) {
+        fprintf(stderr, "New mmap_list entry %d (hash was %d)\n", i, start);
+    }
     mmap_list_entries_used++;
     mmap_list[i].dev = s->st_dev;
     mmap_list[i].ino = s->st_ino;
@@ -118,9 +122,9 @@ void release_mmap(struct mmap_entry *e)
     if (!e)
         return;
     if (!e->use_count) {
-#ifdef DEBUG
-        fprintf(stderr, "mmap_list(%p)->use_count already zero!\n", e);
-#endif
+        DEBUG(DEBUG_MMAP_CACHE) {
+            fprintf(stderr, "mmap_list(%p)->use_count already zero!\n", e);
+        }
         return;
     }
     if (!--(e->use_count)) {

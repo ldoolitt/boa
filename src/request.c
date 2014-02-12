@@ -20,13 +20,10 @@
  *
  */
 
-/* $Id: request.c,v 1.112.2.39 2003/03/10 03:18:54 jnelson Exp $*/
+/* $Id: request.c,v 1.112.2.45 2003/10/05 03:30:00 jnelson Exp $*/
 
 #include "boa.h"
 #include <stddef.h>             /* for offsetof */
-
-#define DEBUG if
-#define DEBUG_REQUEST 0
 
 #define TUNE_SNDBUF
 /*
@@ -245,19 +242,19 @@ void get_request(int server_sock)
     }
 #endif
 
-#ifndef NO_RATE_LIMIT
-    if (total_connections + 1 > max_connections) {
-        send_r_service_unavailable(conn);
-        conn->status = DONE;
-        pending_requests = 0;
-    }
-#endif                          /* NO_RATE_LIMIT */
-
     total_connections++;
     /* gotta have some breathing room */
     if (total_connections > max_connections) {
         pending_requests = 0;
+#ifndef NO_RATE_LIMIT
+        /* have to fake an http version */
+        conn->http_version = HTTP10;
+        conn->method = M_GET;
+        send_r_service_unavailable(conn);
+        conn->status = DONE;
+#endif                          /* NO_RATE_LIMIT */
     }
+
     enqueue(&request_ready, conn);
 }
 
@@ -272,8 +269,6 @@ static void sanitize_request(request * req, int new_req)
     } else {
         unsigned int bytes_to_move =
             req->client_stream_pos - req->parse_pos;
-
-        --(req->kacount);
 
         if (bytes_to_move) {
             memmove(req->client_stream,
@@ -311,7 +306,7 @@ static void free_request(request * req)
     /* free_request should *never* get called by anything but
        process_requests */
 
-    if (req->buffer_end && req->status != DEAD) {
+    if (req->buffer_end && req->status < TIMED_OUT) {
         /*
          WARN("request sent to free_request before DONE.");
          */
@@ -333,19 +328,27 @@ static void free_request(request * req)
     /* put request on the free list */
     dequeue(&request_ready, req); /* dequeue from ready or block list */
 
-    if (req->logline)           /* access log */
-        log_access(req);
+    /* set response status to 408 if the client has timed out */
+    if (req->status == TIMED_OUT && req->response_status == 0)
+        req->response_status = 408;
+
+    /* always log */
+    log_access(req);
 
     if (req->mmap_entry_var)
         release_mmap(req->mmap_entry_var);
     else if (req->data_mem)
         munmap(req->data_mem, req->filesize);
 
-    if (req->data_fd)
+    if (req->data_fd) {
         close(req->data_fd);
+        BOA_FD_CLR(req, req->data_fd, BOA_READ);
+    }
 
-    if (req->post_data_fd)
+    if (req->post_data_fd) {
         close(req->post_data_fd);
+        BOA_FD_CLR(req, req->post_data_fd, BOA_WRITE);
+    }
 
     if (req->response_status >= 400)
         status.errors++;
@@ -373,13 +376,16 @@ static void free_request(request * req)
     if (req->ranges)
         ranges_reset(req);
 
-    if (req->status != DEAD && (req->keepalive == KA_ACTIVE) &&
-        (req->response_status < 500) && req->kacount > 0) {
+    if (req->status < TIMED_OUT && (req->keepalive == KA_ACTIVE) &&
+        (req->response_status < 500 && req->response_status != 0) && req->kacount > 0) {
         sanitize_request(req, 0);
+
+        --(req->kacount);
 
         status.requests++;
         enqueue(&request_block, req);
         BOA_FD_SET(req, req->fd, BOA_READ);
+        BOA_FD_CLR(req, req->fd, BOA_WRITE);
         return;
     }
 
@@ -420,6 +426,8 @@ static void free_request(request * req)
         read(req->fd, buf, sizeof(buf));
     }
     close(req->fd);
+    BOA_FD_CLR(req, req->fd, BOA_READ);
+    BOA_FD_CLR(req, req->fd, BOA_WRITE);
     total_connections--;
 
     enqueue(&request_free, req);
@@ -456,7 +464,7 @@ void process_requests(int server_sock)
         retval = 1;             /* emulate "success" in case we don't have to flush */
 
         if (current->buffer_end && /* there is data in the buffer */
-            current->status != DEAD && current->status != DONE) {
+            current->status < TIMED_OUT) {
             retval = req_flush(current);
             /*
              * retval can be -2=error, -1=blocked, or bytes left
@@ -516,6 +524,7 @@ void process_requests(int server_sock)
                     retval = 1;
                 }
                 break;
+            case TIMED_OUT:
             case DEAD:
                 retval = 0;
                 current->buffer_end = 0;
@@ -736,6 +745,9 @@ int process_logline(request * req)
                      * fixed in revision 1.52 of httplib.py, dated
                      * 2002-06-28 (perhaps Python 2.3 will
                      * contain the fix.)
+                     *
+                     * Also, send_r_continue should *only* be
+                     * used if the expect header was sent.
                      */
                     /* send_r_continue(req); */
                 } else {

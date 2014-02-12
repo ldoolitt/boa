@@ -18,14 +18,11 @@
  *
  */
 
-/* $Id: config.c,v 1.31.2.21 2003/02/19 03:06:48 jnelson Exp $*/
+/* $Id: config.c,v 1.31.2.23 2003/12/09 04:17:22 jnelson Exp $*/
 
 #include "boa.h"
 #include "access.h"
 #include <sys/resource.h>
-
-#define DEBUG_CONFIG 0
-#define DEBUG if
 
 const char *config_file_name;
 
@@ -58,6 +55,7 @@ char *cgi_path;
 int single_post_limit = SINGLE_POST_LIMIT_DEFAULT;
 
 unsigned int ka_timeout;
+unsigned int default_timeout;
 unsigned int ka_max;
 
 /* These came from log.c */
@@ -66,6 +64,12 @@ char *access_log_name;
 char *cgi_log_name;
 
 int use_localtime;
+
+#ifdef USE_SETRLIMIT
+extern int cgi_rlimit_cpu;      /* boa.c */
+extern int cgi_rlimit_data;     /* boa.c */
+extern int cgi_nice;            /* boa.c */
+#endif
 
 /* These are new */
 static void c_set_user(char *v1, char *v2, void *t);
@@ -151,6 +155,11 @@ struct ccommand clist[] = {
     {"MaxConnections", S1A, c_set_int, &max_connections},
     {"Allow", S1A, c_add_access, &access_allow_number},
     {"Deny", S1A, c_add_access, &access_deny_number},
+#ifdef USE_SETRLIMIT
+    {"CGIRlimitCpu", S2A, c_set_int, &cgi_rlimit_cpu},
+    {"CGIRlimitData", S2A, c_set_int, &cgi_rlimit_data},
+    {"CGINice", S2A, c_set_int, &cgi_nice},
+#endif
 };
 
 static void c_set_user(char *v1, char *v2, void *t)
@@ -543,6 +552,17 @@ void read_config_files(void)
         default_vhost = DEFAULT_VHOST;
     }
 
+#ifdef USE_SETRLIMIT
+    if (cgi_rlimit_cpu < 0)
+        cgi_rlimit_cpu = 0;
+
+    if (cgi_rlimit_data < 0)
+        cgi_rlimit_data = 0;
+
+    if (cgi_nice < 0)
+        cgi_nice = 0;
+#endif
+
     if (max_connections < 1) {
         struct rlimit rl;
         int c;
@@ -556,4 +576,11 @@ void read_config_files(void)
     }
     if (max_connections > FD_SETSIZE - 20)
         max_connections = FD_SETSIZE - 20;
+
+    /* save some time */
+    default_timeout = (ka_timeout ? ka_timeout : REQUEST_TIMEOUT);
+#ifdef HAVE_POLL
+    default_timeout *= 1000;
+#endif
+
 }

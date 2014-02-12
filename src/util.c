@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: util.c,v 1.61.2.12 2003/02/24 02:47:28 jnelson Exp $ */
+/* $Id: util.c,v 1.61.2.14 2003/10/05 03:27:40 jnelson Exp $ */
 
 #include "boa.h"
 
@@ -557,8 +557,8 @@ int check_host(const char *r)
         return -1;
     }
 
-    /* must start with a letter */
-    if (!isalpha(*c))
+    /* must start with a letter or number */
+    if (!isalnum(*c))
         return -1;
 
     if (strlen(c) > 63)
@@ -591,3 +591,96 @@ void strlower(char *s)
         ++s;
     }
 }
+
+#ifndef DISABLE_DEBUG
+struct dbg {
+    int level;
+    char *mesg;
+};
+
+struct dbg debug_level_table[] = {
+    {DEBUG_ALIAS, "Alias"},
+    {DEBUG_CGI_OUTPUT, "CGI Output"},
+    {DEBUG_CGI_INPUT, "CGI Input"},
+    {DEBUG_CGI_ENV, "CGI Environment"},
+    {DEBUG_HEADER_READ, "Header Read State"},
+    {DEBUG_PIPELINE, "Pipeline"},
+    {DEBUG_PLUGIN_ERRORS, "Plugin Error"},
+    {DEBUG_RANGE, "Range related"},
+    {DEBUG_CONFIG, "Configuration"},
+    {DEBUG_BUFFER_IO, "Buffer I/O"},
+    {DEBUG_BODY_READ, "Body Read State"},
+    {DEBUG_MMAP_CACHE, "mmap Cache"},
+    {DEBUG_REQUEST, "Generic Request"},
+    {DEBUG_HASH, "hash table"}
+};
+
+
+void print_debug_usage(void)
+{
+    struct dbg *p;
+
+    fprintf(stderr,
+            "  To calculate the debug level, logically 'or'\n"
+            "  some of the following values together to get a debug level:\n");
+    for (p = debug_level_table;
+         p <
+         debug_level_table +
+         (sizeof (debug_level_table) / sizeof (struct dbg)); p++) {
+        fprintf(stderr, "\t%d:\t%s\n", p->level, p->mesg);
+    }
+    fprintf(stderr, "\n");
+}
+
+void parse_debug(char *foo)
+{
+    int i;
+    struct dbg *p;
+
+    if (!foo)
+        return;
+
+    log_error_time();
+    fprintf(stderr, "Before parse_debug, debug_level is: %d\n",
+            debug_level);
+    if (foo[0] == '-') {
+        i = boa_atoi(foo + 1);
+        if (i == -1) {
+            /* error */
+            fprintf(stderr, "Invalid level specified.\n");
+            exit(1);
+        }
+        i = -i;
+    } else {
+        i = boa_atoi(foo);
+        if (i == -1) {
+            /* error */
+            fprintf(stderr, "Invalid level specified.\n");
+            exit(1);
+        }
+    }
+    for (p = debug_level_table;
+         p <
+         debug_level_table +
+         (sizeof (debug_level_table) / sizeof (struct dbg)); p++) {
+        if (i > 0) {
+            if (i & p->level) {
+                log_error_time();
+                fprintf(stderr, "Enabling %s debug level.\n",
+                        p->mesg);
+                debug_level |= p->level;
+            }
+        } else {
+            if (-i & p->level) {
+                log_error_time();
+                fprintf(stderr, "Disabling %s debug level.\n",
+                        p->mesg);
+                debug_level &= ~(p->level);
+            }
+        }
+    }
+    log_error_time();
+    fprintf(stderr, "After parse_debug, debug_level is: %d\n",
+            debug_level);
+}
+#endif

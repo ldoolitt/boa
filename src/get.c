@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: get.c,v 1.76.2.28 2003/03/06 02:57:58 jnelson Exp $*/
+/* $Id: get.c,v 1.76.2.30 2003/10/05 03:33:08 jnelson Exp $*/
 
 #include "boa.h"
 #include "access.h"
@@ -30,8 +30,6 @@
  * change to 1 to allow much simpler redirections.
  */
 /* #define ALLOW_LOCAL_REDIRECT */
-#define DEBUG if
-#define DEBUG_RANGE 0
 
 /* local prototypes */
 int get_cachedir_file(request * req, struct stat *statbuf);
@@ -309,7 +307,7 @@ int init_get(request * req)
     if (!req->ranges) {
         req->ranges = range_pool_pop();
         req->ranges->start = 0;
-        req->ranges->stop = -1;
+        req->ranges->stop = ULONG_MAX;
         if (!ranges_fixup(req)) {
             return 0;
         }
@@ -328,7 +326,7 @@ int init_get(request * req)
             ranges_reset(req);
             req->ranges = range_pool_pop();
             req->ranges->start = 0;
-            req->ranges->stop = -1;
+            req->ranges->stop = ULONG_MAX;
             if (!ranges_fixup(req)) {
                 return 0;
             }

@@ -21,11 +21,9 @@
  *
  */
 
-/* $Id: alias.c,v 1.70.2.14 2003/02/21 23:40:41 jnelson Exp $ */
+/* $Id: alias.c,v 1.70.2.15 2003/10/05 03:39:20 jnelson Exp $ */
 
 #include "boa.h"
-#define DEBUG if
-#define DEBUG_ALIAS 0
 
 struct alias {
     char *fakename;             /* URI path to file */

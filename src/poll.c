@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: poll.c,v 1.2.2.12 2003/02/19 03:06:48 jnelson Exp $*/
+/* $Id: poll.c,v 1.2.2.16 2003/12/09 04:17:22 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -99,17 +99,24 @@ void loop(int server_s)
         pending_requests = 0;
         if (pfd_len) {
             timeout = (request_ready ? 0 :
-                       (request_block ?
-                        (ka_timeout ? ka_timeout * 1000 :
-                         REQUEST_TIMEOUT * 1000) : -1));
+                      (request_block ? default_timeout : -1));
 
             if (poll(pfds, pfd_len, timeout) == -1) {
                 if (errno == EINTR)
                     continue;       /* while(1) */
             }
-            if (!sigterm_flag && watch_server &&
-                (pfds[server_pfd].revents & BOA_READ))
-                pending_requests = 1;
+            if (!sigterm_flag && watch_server) {
+                /*  */
+                if (pfds[server_pfd].revents &
+                  (POLLNVAL|POLLERR)) {
+                    /* problem with the server socket, unexpected */
+                    log_error("server pfd revent contains "
+                      "POLLNVAL or POLLERR! Exiting.");
+                    exit(1);
+                } else if (pfds[server_pfd].revents & BOA_READ) {
+                    pending_requests = 1;
+                }
+            }
             time(&current_time);
             /* if pfd_len is 0, we didn't poll, so the current time
              * should be up-to-date, and we *won't* be accepting anyway
@@ -154,6 +161,7 @@ void update_blocked(struct pollfd pfd1[])
 {
     request *current, *next = NULL;
     time_t time_since;
+    int revents;
 
     time(&current_time);
     for (current = request_block; current; current = next) {
@@ -165,17 +173,27 @@ void update_blocked(struct pollfd pfd1[])
         /* hmm, what if we are in "the middle" of a request and not
          * just waiting for a new one... perhaps check to see if anything
          * has been read via header position, etc... */
-        if (pfds[current->pollfd_id].revents) {
-            ;
+        revents = pfds[current->pollfd_id].revents;
+        if (revents & (POLLNVAL|POLLERR)) {
+            /* socket returned error */
+            log_error_time();
+            fprintf(stderr, "Socket %d returned "
+                    "POLLNVAL|POLLERR (%s%s) ",
+                    current->fd,
+                    revents & POLLNVAL ? "POLLNVAL ":"",
+                    revents & POLLERR ? "POLLERR ":"");
+            current->status = DEAD;
         } else if (time_since > REQUEST_TIMEOUT) {
             log_error_doc(current);
             fputs("connection timed out\n", stderr);
-            current->status = DEAD;
+            current->status = TIMED_OUT; /* connection timed out */
         } else if (current->kacount < ka_max && /* we *are* in a keepalive */
             (time_since >= ka_timeout) && /* ka timeout has passed */
             !current->logline) { /* haven't read anything yet */
-            current->status = DEAD; /* connection keepalive timed out */
-        } else {                /* still blocked */
+            log_error_doc(current);
+            fputs("connection timed out\n", stderr);
+            current->status = TIMED_OUT; /* connection timed out */
+        } else if (revents == 0) {                /* still blocked */
             pfd1[pfd_len].fd = pfds[current->pollfd_id].fd;
             pfd1[pfd_len].events = pfds[current->pollfd_id].events;
             current->pollfd_id = pfd_len++;

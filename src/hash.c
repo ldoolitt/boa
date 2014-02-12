@@ -20,16 +20,13 @@
  *
  */
 
-/* $Id: hash.c,v 1.14.4.11 2003/02/21 23:44:30 jnelson Exp $*/
+/* $Id: hash.c,v 1.14.4.12 2003/10/05 03:40:18 jnelson Exp $*/
 
 #include "boa.h"
 
 #ifndef MAX_HASH_LENGTH
 #define MAX_HASH_LENGTH 4
 #endif
-
-#define DEBUG if
-#define DEBUG_HASH 0
 
 /*
  * There are two hash tables used, each with a key/value pair

@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: boa.h,v 1.63.2.19 2003/02/19 03:03:31 jnelson Exp $*/
+/* $Id: boa.h,v 1.63.2.22 2003/10/05 04:15:29 jnelson Exp $*/
 
 #ifndef _BOA_H
 #define _BOA_H
@@ -83,8 +83,10 @@ void log_error_time(void);
 void log_error(const char *mesg);
 #ifdef HAVE_FUNC
 void log_error_mesg(const char *file, int line, const char *func, const char *mesg);
+void log_error_mesg_fatal(const char *file, int line, const char *func, const char *mesg);
 #else
 void log_error_mesg(const char *file, int line, const char *mesg);
+void log_error_mesg_fatal(const char *file, int line, const char *mesg);
 #endif
 
 /* queue */
@@ -152,6 +154,7 @@ int init_cgi(request * req);
 
 /* signals */
 void init_signals(void);
+void reset_signals(void);
 void sighup_run(void);
 void sigchld_run(void);
 void sigalrm_run(void);
@@ -168,12 +171,15 @@ int month2int(const char *month);
 int modified_since(time_t * mtime, const char *if_modified_since);
 int unescape_uri(char *uri, char **query_string);
 int create_temporary_file(short want_unlink, char *storage, unsigned int size);
-char *normalize_path(char *path);
 int real_set_block_fd(int fd);
 int real_set_nonblock_fd(int fd);
 char *to_upper(char *str);
 void strlower(char *s);
 int check_host(const char *r);
+#ifndef DISABLE_DEBUG
+void parse_debug(char *foo);
+void print_debug_usage(void);
+#endif
 
 /* buffer */
 int req_write(request * req, const char *msg);

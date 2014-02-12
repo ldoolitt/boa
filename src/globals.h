@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: globals.h,v 1.65.2.23 2003/01/23 04:05:03 jnelson Exp $*/
+/* $Id: globals.h,v 1.65.2.25 2003/12/09 04:17:22 jnelson Exp $*/
 
 #ifndef _GLOBALS_H
 #define _GLOBALS_H
@@ -40,6 +40,7 @@ enum REQ_STATUS { READ_HEADER, ONE_CR, ONE_LF, TWO_CR,
     PIPE_READ, PIPE_WRITE,
     IOSHUFFLE,
     DONE,
+    TIMED_OUT,
     DEAD
 };
 
@@ -254,6 +255,7 @@ extern char *cgi_path;
 extern int single_post_limit;
 
 extern int unsigned ka_timeout;
+extern int unsigned default_timeout;
 extern int unsigned ka_max;
 
 extern int sighup_flag;

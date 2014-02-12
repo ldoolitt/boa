@@ -26,9 +26,6 @@
 
 #include "boa.h"
 
-#define DEBUG if
-#define DEBUG_RANGE 0
-
 static void range_abort(request * req);
 static void range_add(request * req, unsigned long start, unsigned long stop);
 
@@ -253,6 +250,7 @@ int range_parse(request * req, const char *str)
     if (strncasecmp(str, "bytes=", 6)) {
         /* error.  Doesn't start with 'bytes=' */
         log_error_doc(req);
+        log_error_time();
         fprintf(stderr, "range \"%s\" doesn't start with \"bytes=\"\n",
                 str);
         return 0;
@@ -353,6 +351,7 @@ int range_parse(request * req, const char *str)
                 stop = ULONG_MAX;
             if ((fcode & ACTMASK2) == AR) {
                 log_error_doc(req);
+                log_error_time();
                 fprintf(stderr, "Invalid range request \"%s\".\n", initial_str);
                 range_abort(req);
                 return 0;
@@ -360,6 +359,7 @@ int range_parse(request * req, const char *str)
                 if ((start == stop) && (start == ULONG_MAX)) {
                     /* neither was specified, or they were very big. */
                     log_error_doc(req);
+                    log_error_time();
                     fprintf(stderr, "Invalid range request (neither start nor stop were specified).\n");
                     range_abort(req);
                     return 0;

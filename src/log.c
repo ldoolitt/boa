@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: log.c,v 1.36.2.20 2003/02/19 00:45:38 jnelson Exp $*/
+/* $Id: log.c,v 1.36.2.22 2003/05/09 16:52:10 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -157,7 +157,7 @@ void log_access(request * req)
     printf("%s - - %s\"%s\" %d %ld \"%s\" \"%s\"\n",
            req->remote_ip_addr,
            get_commonlog_time(),
-           req->logline,
+           req->logline ? req->logline : "-",
            req->response_status,
            req->bytes_written,
            (req->header_referer ? req->header_referer : "-"),
@@ -261,6 +261,18 @@ void log_error_mesg(const char *file, int line, const char *func, const char *me
     perror(mesg);
     errno = errno_save;
 }
+
+void log_error_mesg_fatal(const char *file, int line, const char *func, const char *mesg)
+{
+    int errno_save = errno;
+    fprintf(stderr, "%s%s:%d (%s) - ", get_commonlog_time(), file, line, func);
+    errno = errno_save;
+    perror(mesg);
+    errno = errno_save;
+    exit(errno);
+}
+
+
 #else
 void log_error_mesg(const char *file, int line, const char *mesg)
 {
@@ -269,5 +281,15 @@ void log_error_mesg(const char *file, int line, const char *mesg)
     errno = errno_save;
     perror(mesg);
     errno = errno_save;
+}
+
+void log_error_mesg_fatal(const char *file, int line, const char *mesg)
+{
+    int errno_save = errno;
+    fprintf(stderr, "%s%s:%d - ", get_commonlog_time(), file, line);
+    errno = errno_save;
+    perror(mesg);
+    errno = errno_save;
+    exit(errno);
 }
 #endif

@@ -166,6 +166,38 @@
  * if key or value for an http header is invalid, log it.
  * be more strict with range parsing
  * handle 0-byte sendfile attempt better
+ * as of 0.94.14rc18:
+ * add log_error_mesg_fatal, which does log_error_mesg and then exits
+ * fix malloc thinko in buffer code
+ * use ULONG_MAX instead of -1 to describe unbounded ranges
+ * log '-' instead of req->logline if req->logline is undefined
+ * remove some superflous send_r_error statements.
+ * fix a logic inversion regarding QUIET_DISCONNECT
+ * move rate limit code very slightly, and force http version of 1.0
+ * move req->ka_count decrement out of sanitize_request
+ * /always/ issue log_access in free_request
+ * use BOA_FD_CLR to clear file descriptors out of the FD_SETs that
+   they might be in.
+ * disable keepalive when response status is 0 or >= 500
+ * update a comment regarding the 100 Continue response
+ * use BOA_READ and BOA_WRITE macros in select.c
+ * backport (but leave it commented out) USE_SETRLIMIT stuff for cgi's
+ * backport DEBUG debugging and logging code
+   disable with --disable-verbose (worth about 4K of binary size)
+ * split out usage and parsing commandline tasks into their own functions 
+   (usage and parse_commandline)
+ * in poll.c, don't just check for BOA_READ, but handle all "error" 
+   conditions first, then check for /any/ revent.
+ * force response code to 400 when client closes connection before request
+   is fully read.
+ * use code 408 to indicate timed-out response
+ * use isalnum instead of isalpha to verify hostname as per Alan's
+   suggestion
+ * fix 2 copy-and-paste error messages in mmap_cache.c (error message
+   was wrong)
+ * add and use TIMED_OUT state for requests that time out.
+ * reset signals (in child process) after forking for CGI
+ * fix multipart range responses
 
 ** Changes from 0.94.12 to 0.94.13
  * Change many instances of log_error_mesg + exit to DIE macro

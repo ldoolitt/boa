@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: select.c,v 1.1.2.13 2003/02/19 03:06:48 jnelson Exp $*/
+/* $Id: select.c,v 1.1.2.16 2003/12/09 04:17:22 jnelson Exp $*/
 
 /* algorithm:
  * handle any signals
@@ -45,8 +45,8 @@ int max_fd = 0;
 
 void loop(int server_s)
 {
-    FD_ZERO(&block_read_fdset);
-    FD_ZERO(&block_write_fdset);
+    FD_ZERO(BOA_READ);
+    FD_ZERO(BOA_WRITE);
 
     max_fd = -1;
 
@@ -66,7 +66,7 @@ void loop(int server_s)
              */
             if (sigterm_flag == 1) {
                 sigterm_stage1_run();
-                BOA_FD_CLR(req, server_s, &block_read_fdset);
+                BOA_FD_CLR(req, server_s, BOA_READ);
                 close(server_s);
                 /* make sure the server isn't in the block list */
                 server_s = -1;
@@ -77,9 +77,9 @@ void loop(int server_s)
         } else {
             if (total_connections > max_connections) {
                 /* FIXME: for poll we don't subtract 20. why? */
-                BOA_FD_CLR(req, server_s, &block_read_fdset);
+                BOA_FD_CLR(req, server_s, BOA_READ);
             } else {
-                BOA_FD_SET(req, server_s, &block_read_fdset); /* server always set */
+                BOA_FD_SET(req, server_s, BOA_READ); /* server always set */
             }
         }
 
@@ -89,12 +89,11 @@ void loop(int server_s)
         if (max_fd) {
             struct timeval req_timeout; /* timeval for select */
 
-            req_timeout.tv_sec = (request_ready ? 0 :
-                                  (ka_timeout ? ka_timeout : REQUEST_TIMEOUT));
+            req_timeout.tv_sec = (request_ready ? 0 : default_timeout);
             req_timeout.tv_usec = 0l; /* reset timeout */
 
-            if (select(max_fd + 1, &block_read_fdset,
-                       &block_write_fdset, NULL,
+            if (select(max_fd + 1, BOA_READ,
+                       BOA_WRITE, NULL,
                        (request_ready || request_block ?
                         &req_timeout : NULL)) == -1) {
                 /* what is the appropriate thing to do here on EBADF */
@@ -108,7 +107,7 @@ void loop(int server_s)
              * Thus avoiding many operations in fdset_update
              * and others.
              */
-            if (!sigterm_flag && FD_ISSET(server_s, &block_read_fdset)) {
+            if (!sigterm_flag && FD_ISSET(server_s, BOA_READ)) {
                 pending_requests = 1;
             }
             time(&current_time); /* for "new" requests if we've been in
@@ -164,69 +163,72 @@ static void fdset_update(void)
          * has been read via header position, etc... */
         if (current->kacount < ka_max && /* we *are* in a keepalive */
             (time_since >= ka_timeout) && /* ka timeout */
-            !current->logline)  /* haven't read anything yet */
-            current->status = DEAD; /* connection keepalive timed out */
-        else if (time_since > REQUEST_TIMEOUT) {
+            !current->logline) { /* haven't read anything yet */
             log_error_doc(current);
             fputs("connection timed out\n", stderr);
-            current->status = DEAD;
+            current->status = TIMED_OUT; /* connection timed out */
+        } else if (time_since > REQUEST_TIMEOUT) {
+            log_error_doc(current);
+            fputs("connection timed out\n", stderr);
+            current->status = TIMED_OUT; /* connection timed out */
         }
         if (current->buffer_end && /* there is data to write */
             current->status < DONE) {
-            if (FD_ISSET(current->fd, &block_write_fdset))
+            if (FD_ISSET(current->fd, BOA_WRITE))
                 ready_request(current);
             else {
-                BOA_FD_SET(current, current->fd, &block_write_fdset);
+                BOA_FD_SET(current, current->fd, BOA_WRITE);
             }
         } else {
             switch (current->status) {
             case IOSHUFFLE:
 #ifndef HAVE_SENDFILE
                 if (current->buffer_end - current->buffer_start == 0) {
-                    if (FD_ISSET(current->data_fd, &block_read_fdset))
+                    if (FD_ISSET(current->data_fd, BOA_READ))
                         ready_request(current);
                     break;
                 }
 #endif
             case WRITE:
             case PIPE_WRITE:
-                if (FD_ISSET(current->fd, &block_write_fdset))
+                if (FD_ISSET(current->fd, BOA_WRITE))
                     ready_request(current);
                 else {
-                    BOA_FD_SET(current, current->fd, &block_write_fdset);
+                    BOA_FD_SET(current, current->fd, BOA_WRITE);
                 }
                 break;
             case BODY_WRITE:
-                if (FD_ISSET(current->post_data_fd, &block_write_fdset))
+                if (FD_ISSET(current->post_data_fd, BOA_WRITE))
                     ready_request(current);
                 else {
                     BOA_FD_SET(current, current->post_data_fd,
-                               &block_write_fdset);
+                               BOA_WRITE);
                 }
                 break;
             case PIPE_READ:
-                if (FD_ISSET(current->data_fd, &block_read_fdset))
+                if (FD_ISSET(current->data_fd, BOA_READ))
                     ready_request(current);
                 else {
                     BOA_FD_SET(current, current->data_fd,
-                               &block_read_fdset);
+                               BOA_READ);
                 }
                 break;
             case DONE:
-                if (FD_ISSET(current->fd, &block_write_fdset))
+                if (FD_ISSET(current->fd, BOA_WRITE))
                     ready_request(current);
                 else {
-                    BOA_FD_SET(current, current->fd, &block_write_fdset);
+                    BOA_FD_SET(current, current->fd, BOA_WRITE);
                 }
                 break;
+            case TIMED_OUT:
             case DEAD:
                 ready_request(current);
                 break;
             default:
-                if (FD_ISSET(current->fd, &block_read_fdset))
+                if (FD_ISSET(current->fd, BOA_READ))
                     ready_request(current);
                 else {
-                    BOA_FD_SET(current, current->fd, &block_read_fdset);
+                    BOA_FD_SET(current, current->fd, BOA_READ);
                 }
                 break;
             }
