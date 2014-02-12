@@ -21,13 +21,11 @@
  *
  */
 
-/* $Id: util.c,v 1.61.2.14 2003/10/05 03:27:40 jnelson Exp $ */
+/* $Id: util.c,v 1.61.2.17 2004/03/01 05:24:35 jnelson Exp $ */
 
 #include "boa.h"
 
-#define HEX_TO_DECIMAL(char1, char2)	\
-    (((char1 >= 'A') ? (((char1 & 0xdf) - 'A') + 10) : (char1 - '0')) * 16) + \
-    (((char2 >= 'A') ? (((char2 & 0xdf) - 'A') + 10) : (char2 - '0')))
+static int date_to_tm(struct tm *file_gmt, const char *cmtime);
 
 /* Don't need or want the trailing nul for these character arrays */
 const char month_tab[48] =
@@ -69,6 +67,63 @@ void clean_pathname(char *pathname)
 
     *cleanpath = '\0';
 }
+
+#if 0
+char *new_clean_pathname(char *pathname)
+{
+    static char *segment[50];
+    int seg_count = 0;
+    char *a, *cleanpath, c;
+
+    a = pathname;
+    segment[seg_count] = pathname;
+    cleanpath = pathname;
+
+    while ((c = *pathname++)) {
+        if (c == '/') {         /* /?? */
+            while (1) {         /* everything in this loop gets eliminated */
+                if (*pathname == '/') /* // */
+                    pathname++;
+                else if (*pathname == '.') { /* /. */
+                    if (*(pathname + 1) == '/') /* /./ */
+                        pathname += 2;
+                    else if (*(pathname + 1) == '\0') /* /.$ */
+                        pathname += 1;
+                    else if (*(pathname + 1) == '.') { /* /.. */
+                        if (*(pathname + 2) == '/') /* /../ */
+                            pathname += 3;
+                        else if (*(pathname + 1) == '\0') /* /..$ */
+                            pathname += 2;
+                        /*
+                           cleanpath goes *back* one
+                         */
+                        if (seg_count)
+                            cleanpath = segment[--seg_count];
+                        else {
+                            *a = '\0';
+                            return a;
+                        }
+                    } else {    /* /.blah */
+                        break;
+                    }
+                } else {        /* we have /something */
+                    break;
+                }
+            }
+            if (seg_count > 49) { /* we can store in spots 0...49 */
+                *a = '\0';
+                return a;
+            }
+            *cleanpath = '/';
+            segment[seg_count++] = cleanpath++;
+        } else
+            *cleanpath++ = c;
+    }
+
+    *cleanpath = '\0';
+    return a;
+}
+#endif
 
 /*
  * Name: get_commonlog_time
@@ -182,9 +237,8 @@ int month2int(const char *monthname)
 }
 
 /*
- * Name: modified_since
- * Description: Decides whether a file's mtime is newer than the
- * If-Modified-Since header of a request.
+ * Name: date_to_seconds
+ * Description:
  *
 
  Sun, 06 Nov 1994 08:49:37 GMT    ; RFC 822, updated by RFC 1123
@@ -193,74 +247,123 @@ int month2int(const char *monthname)
  31 September 2000 23:59:59 GMT   ; non-standard
 
  * RETURN VALUES:
+ *  -1 for error, 0 for success
+ */
+
+static int date_to_tm(struct tm *parsed_gmt, const char *cmtime)
+{
+    char monthname[10 + 1];
+    const char *cmtime_start = cmtime;
+    int day, year, hour, minute, second;
+
+    /* we don't use the weekday portion, so skip over it */
+    while (*cmtime != ' ' && *cmtime != '\0')
+        ++cmtime;
+
+    if (*cmtime != ' ')
+        return -1;
+    /* the pre-space in the third scanf skips whitespace for the string */
+    if (sscanf(cmtime, "%d %3s %d %d:%d:%d GMT", /* RFC 1123 */
+               &day, monthname, &year, &hour, &minute, &second) == 6) {
+    } else if (sscanf(cmtime, "%d-%3s-%d %d:%d:%d GMT", /* RFC 1036 */
+                      &day, monthname, &year, &hour, &minute, &second) == 6) {
+    } else if (sscanf(cmtime, "%3s %d %d:%d:%d %d", /* asctime() format */
+                      monthname, &day, &hour, &minute, &second, &year) == 6) {
+        /*
+         *  allow this non-standard date format: 31 September 2000 23:59:59 GMT
+         * NOTE: Use 'cmtime_start' instead of 'cmtime' here, because the date *starts*
+         *       with the day, versus a throwaway item
+         */
+    } else if (sscanf(cmtime_start, "%d %10s %d %d:%d:%d GMT",
+                      &day, monthname, &year, &hour, &minute, &second) == 6) {
+    } else {
+        log_error_time();
+        fprintf(stderr,
+                "Error in %s, line %d: Unable to sscanf \"%s\"\n",
+                __FILE__, __LINE__, cmtime);
+        return -1;              /* error */
+    }
+
+    if (year < 70)
+        year += 100;
+    if (year > 1900)
+        year -= 1900;
+
+    parsed_gmt->tm_sec = second;
+    parsed_gmt->tm_min = minute;
+    parsed_gmt->tm_hour = hour;
+    parsed_gmt->tm_mday = day;
+    parsed_gmt->tm_mon = month2int(monthname);
+    parsed_gmt->tm_year = year;
+    parsed_gmt->tm_wday = 0;
+    parsed_gmt->tm_yday = 0;
+    parsed_gmt->tm_isdst = 0;
+
+    if (parsed_gmt->tm_mon == -1) {
+        log_error_time();
+        fprintf(stderr, "Invalid month name: \"%s\"\n", monthname);
+        return -1;
+    }
+
+    /* adapted from Squid 2.5 */
+    if (parsed_gmt->tm_sec < 0 || parsed_gmt->tm_sec > 59)
+        return -1;
+    if (parsed_gmt->tm_min < 0 || parsed_gmt->tm_min > 59)
+        return -1;
+    if (parsed_gmt->tm_hour < 0 || parsed_gmt->tm_hour > 23)
+        return -1;
+    if (parsed_gmt->tm_mday < 1 || parsed_gmt->tm_mday > 31)
+        return -1;
+    if (parsed_gmt->tm_mon < 0 || parsed_gmt->tm_mon > 11)
+        return -1;
+    if (parsed_gmt->tm_year < 70 || parsed_gmt->tm_year > 120)
+        return -1;
+
+    return 0;
+}
+
+/*
+ * Name: modified_since
+ * Description: Decides whether a file's mtime is newer than the
+ * If-Modified-Since header of a request.
+ *
+
+ * RETURN VALUES:
  *  0: File has not been modified since specified time.
- *  1: File has been.
+ *  >0: File has been (and value is the converted_time)
  * -1: Error!
  */
 
 int modified_since(time_t * mtime, const char *if_modified_since)
 {
     struct tm *file_gmt;
-    const char *ims_info;
-    char monthname[10 + 1];
-    int day, month, year, hour, minute, second;
+    struct tm parsed_gmt;
     int comp;
 
-    /* skip non-whitespace */
-    ims_info = if_modified_since;
-    while (*ims_info != ' ' && *ims_info != '\0')
-        ++ims_info;
-    if (*ims_info != ' ')
+    if (date_to_tm(&parsed_gmt, if_modified_since) != 0) {
         return -1;
-
-    /* the pre-space in the third scanf skips whitespace for the string */
-    if (sscanf(ims_info, "%d %3s %d %d:%d:%d GMT", /* RFC 1123 */
-               &day, monthname, &year, &hour, &minute, &second) == 6);
-    else if (sscanf(ims_info, "%d-%3s-%d %d:%d:%d GMT", /* RFC 1036 */
-                    &day, monthname, &year, &hour, &minute, &second) == 6)
-        year += 1900;
-    else if (sscanf(ims_info, " %3s %d %d:%d:%d %d", /* asctime() format */
-                    monthname, &day, &hour, &minute, &second, &year) == 6);
-    /*  allow this non-standard date format: 31 September 2000 23:59:59 GMT */
-    /* NOTE: Use if_modified_since here, because the date *starts*
-     *       with the day, versus a throwaway item
-     */
-    else if (sscanf(if_modified_since, "%d %10s %d %d:%d:%d GMT",
-                    &day, monthname, &year, &hour, &minute, &second) == 6);
-    else {
-        log_error_time();
-        fprintf(stderr, "Error scanning \"%s\" in modified_since\n", ims_info);
-        return -1;              /* error */
     }
 
     file_gmt = gmtime(mtime);
-    month = month2int(monthname);
-
-    if (month == -1) {
-        log_error_time();
-        fprintf(stderr, "Invalid month name: \"%s\"\n", monthname);
-        return -1;
-    }
 
     /* Go through from years to seconds -- if they are ever unequal,
        we know which one is newer and can return */
+    if ((comp = file_gmt->tm_year - parsed_gmt.tm_year))
+        return (comp > 0);
+    if ((comp = file_gmt->tm_mon - parsed_gmt.tm_mon))
+        return (comp > 0);
+    if ((comp = file_gmt->tm_mday - parsed_gmt.tm_mday))
+        return (comp > 0);
+    if ((comp = file_gmt->tm_hour - parsed_gmt.tm_hour))
+        return (comp > 0);
+    if ((comp = file_gmt->tm_min - parsed_gmt.tm_min))
+        return (comp > 0);
+    if ((comp = file_gmt->tm_sec - parsed_gmt.tm_sec))
+        return (comp > 0);
 
-    if ((comp = 1900 + file_gmt->tm_year - year))
-        return (comp > 0);
-    if ((comp = file_gmt->tm_mon - month))
-        return (comp > 0);
-    if ((comp = file_gmt->tm_mday - day))
-        return (comp > 0);
-    if ((comp = file_gmt->tm_hour - hour))
-        return (comp > 0);
-    if ((comp = file_gmt->tm_min - minute))
-        return (comp > 0);
-    if ((comp = file_gmt->tm_sec - second))
-        return (comp > 0);
-
-    return 0;                   /* this person must really be into the latest/greatest */
+    /* this person must really be into the latest/greatest */
+    return 0;
 }
-
 
 /*
  * Name: to_upper

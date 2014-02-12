@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: read.c,v 1.49.2.11 2003/10/05 04:25:06 jnelson Exp $*/
+/* $Id: read.c,v 1.49.2.12 2003/12/24 05:28:24 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -45,14 +45,14 @@ int read_header(request * req)
     buffer = req->client_stream;
     bytes = req->client_stream_pos;
 
-#ifdef VERY_FASCIST_LOGGING
-    if (check < (buffer + bytes)) {
-        buffer[bytes] = '\0';
-        log_error_time();
-        fprintf(stderr, "%s:%d - Parsing headers (\"%s\")\n",
-                __FILE__, __LINE__, check);
+    DEBUG(DEBUG_HEADER_READ) {
+        if (check < (buffer + bytes)) {
+            buffer[bytes] = '\0';
+            log_error_time();
+            fprintf(stderr, "%s:%d - Parsing headers (\"%s\")\n",
+                    __FILE__, __LINE__, check);
+        }
     }
-#endif
     while (check < (buffer + bytes)) {
         /* check for illegal characters here
          * Anything except CR, LF, and US-ASCII - control is legal
@@ -258,17 +258,18 @@ int read_header(request * req)
         /* bytes is positive */
         req->client_stream_pos += bytes;
 
-#ifdef FASCIST_LOGGING1
-        log_error_time();
-        req->client_stream[req->client_stream_pos] = '\0';
-        fprintf(stderr, "%s:%d -- We read %d bytes: \"%s\"\n",
-                __FILE__, __LINE__, bytes,
+        DEBUG(DEBUG_HEADER_READ) {
+            log_error_time();
+            req->client_stream[req->client_stream_pos] = '\0';
+            fprintf(stderr, "%s:%d -- We read %d bytes: \"%s\"\n",
+                    __FILE__, __LINE__, bytes,
 #ifdef VERY_FASCIST_LOGGING2
-                req->client_stream + req->client_stream_pos - bytes);
+                    req->client_stream + req->client_stream_pos - bytes
 #else
-                "");
+                    ""
 #endif
-#endif
+                   );
+        }
 
         return 1;
     }
@@ -371,7 +372,7 @@ int write_body(request * req)
     bytes_written = write(req->post_data_fd,
                           req->header_line, bytes_to_write);
 
-    if (bytes_written == -1) {
+    if (bytes_written < 0) {
         if (errno == EWOULDBLOCK || errno == EAGAIN)
             return -1;          /* request blocked at the pipe level, but keep going */
         else if (errno == EINTR)
@@ -387,15 +388,29 @@ int write_body(request * req)
             return 0;
         }
     }
-#ifdef FASCIST_LOGGING
-    log_error_time();
-    fprintf(stderr, "%s:%d - wrote %d bytes. %ld of %ld\n",
-            __FILE__, __LINE__,
-            bytes_written, req->filepos, req->filesize);
-#endif
+    DEBUG(DEBUG_HEADER_READ) {
+        log_error_time();
+        fprintf(stderr, "%s:%d - wrote %d bytes of CGI body. %ld of %ld\n",
+                __FILE__, __LINE__,
+                bytes_written, req->filepos, req->filesize);
+    }
 
     req->filepos += bytes_written;
     req->header_line += bytes_written;
+
+    DEBUG(DEBUG_CGI_INPUT) {
+        log_error_time();
+        {
+            char c = req->header_line[bytes_written];
+
+            req->header_line[bytes_written] = '\0';
+            fprintf(stderr,
+                    "%s:%d - wrote %d bytes (%s). %lu of %lu\n",
+                    __FILE__, __LINE__, bytes_written,
+                    req->header_line, req->filepos, req->filesize);
+            req->header_line[bytes_written] = c;
+        }
+    }
 
     return 1;                   /* more to do */
 }

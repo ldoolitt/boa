@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: boa.h,v 1.63.2.22 2003/10/05 04:15:29 jnelson Exp $*/
+/* $Id: boa.h,v 1.63.2.24 2004/01/22 04:12:04 jnelson Exp $*/
 
 #ifndef _BOA_H
 #define _BOA_H
@@ -146,10 +146,9 @@ void send_r_bad_version(request * req, const char * version); /* 505 */
 
 /* cgi */
 void create_common_env(void);
+void add_to_common_env(char *key, char *value);
 void clear_common_env(void);
 int add_cgi_env(request * req, const char *key, const char *value, int http_prefix);
-int complete_env(request * req);
-void create_argv(request * req, char **aargv);
 int init_cgi(request * req);
 
 /* signals */

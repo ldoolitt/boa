@@ -20,10 +20,14 @@
  *
  */
 
-/* $Id: get.c,v 1.76.2.30 2003/10/05 03:33:08 jnelson Exp $*/
+/* $Id: get.c,v 1.76.2.33 2004/03/01 05:25:23 jnelson Exp $*/
 
 #include "boa.h"
 #include "access.h"
+
+#define STR(s) __STR(s)
+#define __STR(s) #s
+
 
 /* I think that permanent redirections (301) are supposed
  * to be absolute URIs, but they can be troublesome.
@@ -81,18 +85,16 @@ int init_get(request * req)
                 free(req->pathname);
             req->pathname = strdup(gzip_pathname);
             if (!req->pathname) {
-                log_error_doc(req);
-                perror("strdup");
-                send_r_error(req);
+                boa_perror(req, "strdup req->pathname for gzipped filename " __FILE__ ":" STR(__LINE__));
                 return 0;
             }
             if (req->http_version != HTTP09) {
                 req_write(req, http_ver_string(req->http_version));
-                req_write(req, " 200 OK-GUNZIP\r\n");
+                req_write(req, " 200 OK-GUNZIP" CRLF);
                 print_http_headers(req);
                 print_content_type(req);
                 print_last_modified(req);
-                req_write(req, "\r\n");
+                req_write(req, CRLF);
                 req_flush(req);
             }
             if (req->method == M_HEAD)
@@ -221,6 +223,27 @@ int init_get(request * req)
         return 0;
     }
 
+    /* If-UnModified-Since asks
+     *  is the file newer than date located in time_cval
+     *  yes -> return 412
+     *   no -> return 200
+     *
+     * If-Modified-Since asks
+     *  is the file date less than or same as the date located in time_cval
+     *  yes -> return 304
+     *  no  -> return 200
+     *
+     * If-Unmodified-Since overrides If-Modified-Since
+     */
+
+    /*
+    if (req->headers[H_IF_UNMODIFIED_SINCE] &&
+        modified_since(&(statbuf.st_mtime),
+                       req->headers[H_IF_UNMODIFIED_SINCE])) {
+        send_r_precondition_failed(req);
+        return 0;
+    } else
+    */
     if (req->if_modified_since &&
         !modified_since(&(statbuf.st_mtime), req->if_modified_since)) {
         send_r_not_modified(req);
@@ -380,8 +403,7 @@ int init_get(request * req)
             log_error_doc(req);
             reset_output_buffer(req);
             send_r_error(req);
-            fprintf(stderr, "%sGot SIGBUS in memcpy!\n",
-                    get_commonlog_time());
+            log_error("Got SIGBUS in memcpy\n");
             return 0;
         }
         req->buffer_end += bytes_free;
@@ -516,7 +538,7 @@ int get_dir(request * req, struct stat *statbuf)
 
         if (data_fd != -1) {    /* user's index file */
             /* We have to assume that directory_index will fit, because
-             * if it doesn't, well, that's a huge configuation problem.
+             * if it doesn't, well, that's a huge configuration problem.
              * this is only the 'index.html' pathname for mime type
              */
             memcpy(req->request_uri, directory_index, l2 + 1); /* for mimetype */
@@ -546,19 +568,17 @@ int get_dir(request * req, struct stat *statbuf)
                 free(req->pathname);
             req->pathname = strdup(pathname_with_index);
             if (!req->pathname) {
-                log_error_doc(req);
-                perror("strdup");
-                send_r_error(req);
+                boa_perror(req, "strdup of pathname_with_index for .gz files " __FILE__ ":" STR(__LINE__));
                 return 0;
             }
             if (req->http_version != HTTP09) {
                 req_write(req, http_ver_string(req->http_version));
-                req_write(req, " 200 OK-GUNZIP\r\n");
+                req_write(req, " 200 OK-GUNZIP" CRLF);
                 print_http_headers(req);
                 print_last_modified(req);
                 req_write(req, "Content-Type: ");
                 req_write(req, get_mime_type(directory_index));
-                req_write(req, "\r\n\r\n");
+                req_write(req, CRLF CRLF);
                 req_flush(req);
             }
             if (req->method == M_HEAD)
@@ -576,10 +596,10 @@ int get_dir(request * req, struct stat *statbuf)
         /* the indexer should take care of all headers */
         if (req->http_version != HTTP09) {
             req_write(req, http_ver_string(req->http_version));
-            req_write(req, " 200 OK\r\n");
+            req_write(req, " 200 OK" CRLF);
             print_http_headers(req);
             print_last_modified(req);
-            req_write(req, "Content-Type: text/html\r\n\r\n");
+            req_write(req, "Content-Type: text/html" CRLF CRLF);
             req_flush(req);
         }
         if (req->method == M_HEAD)
@@ -673,7 +693,7 @@ int index_directory(request * req, char *dest_filename)
         int errno_save = errno;
         send_r_error(req);
         log_error_doc(req);
-        fprintf(stderr, "directory \"%s\": ", req->pathname);
+        fprintf(stderr, "opendir failed on directory \"%s\": ", req->pathname);
         errno = errno_save;
         perror("opendir");
         return -1;
@@ -702,7 +722,9 @@ int index_directory(request * req, char *dest_filename)
             continue;
         }
 
-        if ((escname = escape_string(dirbuf->d_name, NULL)) != NULL) {
+        /* FIXME: ought to use (as-yet unwritten) html_escape_string */
+        escname = escape_string(dirbuf->d_name, NULL);
+        if (escname != NULL) {
             bytes += fprintf(fdstream, " <A HREF=\"%s\">%s</A>\n",
                              escname, dirbuf->d_name);
             free(escname);

@@ -19,7 +19,7 @@
  *
  */
 
-/* $Id: defines.h,v 1.107.2.34 2003/10/05 03:36:51 jnelson Exp $*/
+/* $Id: defines.h,v 1.107.2.37 2004/03/01 05:44:36 jnelson Exp $*/
 
 #ifndef _DEFINES_H
 #define _DEFINES_H
@@ -76,7 +76,7 @@
 #endif
 
 #ifndef SERVER_VERSION
-#define SERVER_VERSION 				"Boa/0.94.14rc18"
+#define SERVER_VERSION 				"Boa/0.94.14rc19"
 #endif
 
 #define CGI_VERSION				"CGI/1.1"
@@ -154,6 +154,7 @@ extern int debug_level;
 
 /***************** USEFUL MACROS ************************/
 
+#define CRLF "\r\n"
 #define SQUASH_KA(req)	(req->keepalive=KA_STOPPED)
 
 #ifdef HAVE_FUNC
@@ -163,5 +164,10 @@ extern int debug_level;
 #define WARN(mesg) log_error_mesg(__FILE__, __LINE__, mesg)
 #define DIE(mesg) log_error_mesg_fatal(__FILE__, __LINE__, mesg)
 #endif
+
+#define INT_TO_HEX(x) (((x)>9)?(('a'-10)+(x)):('0'+(x)))
+#define HEX_TO_DECIMAL(char1, char2)    \
+    (((char1 >= 'A') ? (((char1 & 0xdf) - 'A') + 10) : (char1 - '0')) * 16) + \
+    (((char2 >= 'A') ? (((char2 & 0xdf) - 'A') + 10) : (char2 - '0')))
 
 #endif

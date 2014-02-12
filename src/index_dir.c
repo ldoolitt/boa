@@ -17,7 +17,7 @@
  *
  */
 
-/* $Id: index_dir.c,v 1.32.2.4 2003/01/14 05:31:01 jnelson Exp $*/
+/* $Id: index_dir.c,v 1.32.2.5 2004/03/05 04:19:00 jnelson Exp $*/
 
 #include <stdio.h>
 #include <sys/stat.h>
@@ -138,8 +138,8 @@ char *http_escape_string(const char *inp, char *buf, const unsigned int len)
             *index_c++ = ':';
         } else if (needs_escape((unsigned int) c) || c == '?') {
             *index_c++ = '%';
-            *index_c++ = INT_TO_HEX(c >> 4);
-            *index_c++ = INT_TO_HEX(c & 15);
+            *index_c++ = INT_TO_HEX((c >> 4) & 0xf);
+            *index_c++ = INT_TO_HEX(c & 0xf);
         } else
             *index_c++ = c;
     }

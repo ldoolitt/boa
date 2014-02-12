@@ -18,7 +18,7 @@
  *
  */
 
-/* $Id: config.c,v 1.31.2.23 2003/12/09 04:17:22 jnelson Exp $*/
+/* $Id: config.c,v 1.31.2.25 2004/03/05 03:41:33 jnelson Exp $*/
 
 #include "boa.h"
 #include "access.h"
@@ -53,6 +53,7 @@ unsigned int cgi_umask = 027;
 char *pid_file;
 char *cgi_path;
 int single_post_limit = SINGLE_POST_LIMIT_DEFAULT;
+int conceal_server_identity = 0;
 
 unsigned int ka_timeout;
 unsigned int default_timeout;
@@ -72,6 +73,7 @@ extern int cgi_nice;            /* boa.c */
 #endif
 
 /* These are new */
+static void c_add_cgi_env(char *v1, char *v2, void *table_ptr);
 static void c_set_user(char *v1, char *v2, void *t);
 static void c_set_group(char *v1, char *v2, void *t);
 static void c_set_string(char *v1, char *v2, void *t);
@@ -153,6 +155,7 @@ struct ccommand clist[] = {
     {"CGIPath", S1A, c_set_string, &cgi_path},
     {"CGIumask", S1A, c_set_int, &cgi_umask},
     {"MaxConnections", S1A, c_set_int, &max_connections},
+    {"ConcealServerIdentity", S0A, c_set_unity, &conceal_server_identity},
     {"Allow", S1A, c_add_access, &access_allow_number},
     {"Deny", S1A, c_add_access, &access_deny_number},
 #ifdef USE_SETRLIMIT
@@ -160,7 +163,13 @@ struct ccommand clist[] = {
     {"CGIRlimitData", S2A, c_set_int, &cgi_rlimit_data},
     {"CGINice", S2A, c_set_int, &cgi_nice},
 #endif
+    {"CGIEnv", S2A, c_add_cgi_env, NULL},
 };
+
+static void c_add_cgi_env(char *v1, char *v2, void *t)
+{
+    add_to_common_env(v1, v2);
+}
 
 static void c_set_user(char *v1, char *v2, void *t)
 {

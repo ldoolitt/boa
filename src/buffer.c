@@ -19,13 +19,10 @@
  *
  */
 
-/* $Id: buffer.c,v 1.10.2.9 2003/09/10 04:04:37 jnelson Exp $ */
+/* $Id: buffer.c,v 1.10.2.11 2004/03/05 04:19:00 jnelson Exp $ */
 
 #include "boa.h"
 #include "escape.h"
-
-#define INT_TO_HEX(x) \
-    ((((x)-10)>=0)?('A'+((x)-10)):('0'+(x)))
 
 /*
  * Name: req_write
@@ -88,8 +85,8 @@ int req_write_escape_http(request * req, const char *msg)
     while ((c = *inp++) && left >= 3) {
         if (needs_escape((unsigned int) c)) {
             *dest++ = '%';
-            *dest++ = INT_TO_HEX(c >> 4);
-            *dest++ = INT_TO_HEX(c & 15);
+            *dest++ = INT_TO_HEX((c >> 4) & 0xf);
+            *dest++ = INT_TO_HEX(c & 0xf);
             left -= 3;
         } else {
             *dest++ = c;
@@ -291,8 +288,8 @@ char *escape_string(const char *inp, char *buf)
     while ((c = *inp++) && max > 0) {
         if (needs_escape((unsigned int) c)) {
             *ix++ = '%';
-            *ix++ = INT_TO_HEX(c >> 4);
-            *ix++ = INT_TO_HEX(c & 15);
+            *ix++ = INT_TO_HEX((c >> 4) & 0xf);
+            *ix++ = INT_TO_HEX(c & 0xf);
         } else
             *ix++ = c;
     }

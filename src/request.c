@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: request.c,v 1.112.2.45 2003/10/05 03:30:00 jnelson Exp $*/
+/* $Id: request.c,v 1.112.2.48 2004/03/05 03:40:40 jnelson Exp $*/
 
 #include "boa.h"
 #include <stddef.h>             /* for offsetof */
@@ -114,7 +114,6 @@ void get_request(int server_sock)
        the select() and accept() syscalls.
        Code and description by Larry Doolittle <ldoolitt@boa.org>
      */
-#define HEX(x) (((x)>9)?(('a'-10)+(x)):('0'+(x)))
     if (remote_addr.sin_family != PF_INET) {
         struct sockaddr *bogus = (struct sockaddr *) &remote_addr;
         char *ap, ablock[44];
@@ -123,8 +122,8 @@ void get_request(int server_sock)
         log_error_time();
         for (ap = ablock, i = 0; i < remote_addrlen && i < 14; i++) {
             *ap++ = ' ';
-            *ap++ = HEX((bogus->sa_data[i] >> 4) & 0x0f);
-            *ap++ = HEX(bogus->sa_data[i] & 0x0f);
+            *ap++ = INT_TO_HEX((bogus->sa_data[i] >> 4) & 0x0f);
+            *ap++ = INT_TO_HEX(bogus->sa_data[i] & 0x0f);
         }
         *ap = '\0';
         fprintf(stderr, "non-INET connection attempt: socket %d, "
@@ -353,7 +352,7 @@ static void free_request(request * req)
     if (req->response_status >= 400)
         status.errors++;
 
-    for (i = COMMON_CGI_COUNT; i < req->cgi_env_index; ++i) {
+    for (i = common_cgi_env_count; i < req->cgi_env_index; ++i) {
         if (req->cgi_env[i]) {
             free(req->cgi_env[i]);
         } else {
@@ -764,7 +763,7 @@ int process_logline(request * req)
         send_r_bad_request(req);
         return 0;
     }
-    req->cgi_env_index = COMMON_CGI_COUNT;
+    req->cgi_env_index = common_cgi_env_count;
 
     return 1;
 
@@ -854,11 +853,9 @@ int process_header_end(request * req)
             return 0;
         }
         if (fcntl(req->post_data_fd, F_SETFD, 1) == -1) {
-            log_error_doc(req);
-            fputs("unable to set close-on-exec for req->post_data_fd!\n", stderr);
+            boa_perror(req, "unable to set close-on-exec for req->post_data_fd!");
             close(req->post_data_fd);
             req->post_data_fd = 0;
-            send_r_error(req);
             return 0;
         }
         return 1;             /* success */
@@ -906,7 +903,8 @@ int process_option_line(request * req)
 
     /* if c == '\0' there was no 'value' for the key */
     if (c == '\0') {
-        return 0;
+        /* return now to bypass any parsing or assignment */
+        return 1;
     }
 
     switch (line[0]) {

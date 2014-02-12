@@ -20,24 +20,11 @@
  *
  */
 
-/* $Id: log.c,v 1.36.2.22 2003/05/09 16:52:10 jnelson Exp $*/
+/* $Id: log.c,v 1.36.2.24 2004/01/22 04:11:07 jnelson Exp $*/
 
 #include "boa.h"
 
 int cgi_log_fd;
-
-FILE *fopen_gen_fd(char *spec, const char *mode);
-
-FILE *fopen_gen_fd(char *spec, const char *mode)
-{
-    int fd;
-    if (!spec || *spec == '\0')
-        return NULL;
-    fd = open_gen_fd(spec);
-    if (fd == -1)
-        return NULL;
-    return fdopen(fd, mode);
-}
 
 /*
  * Name: open_logs
@@ -61,7 +48,8 @@ void open_logs(void)
         int error_log;
 
         /* open the log file */
-        if (!(error_log = open_gen_fd(error_log_name))) {
+        error_log = open_gen_fd(error_log_name);
+        if (error_log < 0) {
             DIE("unable to open error log");
         }
 
@@ -84,6 +72,10 @@ void open_logs(void)
     if (dup2(access_log, STDOUT_FILENO) == -1) {
         DIE("can't dup2 /dev/null to STDOUT_FILENO");
     }
+    if (fcntl(access_log, F_SETFD, 1) == -1) {
+        DIE("unable to set close-on-exec flag for access_log");
+    }
+
     close(access_log);
 
     if (cgi_log_name) {

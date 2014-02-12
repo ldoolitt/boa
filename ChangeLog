@@ -43,7 +43,7 @@
    #ifdef USE_NCSA_CGI_ENV
  * fix some escaping issues with the directory indexer
    (Ulf Harnhammar)
- * backport poll support from 0.95
+ * poll or select available at compile time
  * as of 0.94.14rc2 through 0.94.14rc3:
  * remove support for lex/yacc (backported from 0.95)
  * add conditional support for http/1.1
@@ -182,8 +182,11 @@
  * update a comment regarding the 100 Continue response
  * use BOA_READ and BOA_WRITE macros in select.c
  * backport (but leave it commented out) USE_SETRLIMIT stuff for cgi's
- * backport DEBUG debugging and logging code
-   disable with --disable-verbose (worth about 4K of binary size)
+   This (currently disabled) functionality enables the use of 
+   CGIRlimit{CPU,Data,Nice} configuration values for CGI execution.
+ * backported DEBUG debugging and logging code allows run-time
+   enabling of finer-grained debugging. Disable with 
+   --disable-verbose (worth about 4K of binary size)
  * split out usage and parsing commandline tasks into their own functions 
    (usage and parse_commandline)
  * in poll.c, don't just check for BOA_READ, but handle all "error" 
@@ -198,7 +201,36 @@
  * add and use TIMED_OUT state for requests that time out.
  * reset signals (in child process) after forking for CGI
  * fix multipart range responses
-
+ * as of 0.94.14rc19:
+ * change many instances of log_error_mesg + send_r_error to boa_perror
+ * set timezone right away at program startup
+ * add new_clean_pathname from now-defunct 0.95 branch
+   (unused via #if 0)
+ * change common_cgi_env to be dynamically sized, using realloc.
+ * add new keyword, CGIEnv, which takes 2 parameters and adds them as 
+   the key and value of another common environment variable for CGI.
+   This item requires the previous change.
+ * split modified_since into 2 routines:
+   date_to_tm, which parses various date formats into a 'struct tm', and
+   modified_since, which then just compares the struct tm to the
+    items from a statbuf.
+ * remove fake status codes R_413 and R_415, and manually set
+   R_REQUEST_URI_TOO_LONG to 414 and R_INVALID_RANGE to 416
+ * move CRLF macro definition to defines.h
+ * use CRLF macro everywhere
+ * don't print content-length in print_partial_content_continue
+ * remove extra CRLF in print_partial_content_done
+ * *do* print content-length in 206 response's "primary" headers IFF There
+   is only 1 range.
+ * move CRLF in 206 *after* to the print_partial_content_continue
+ * in 503, remove \r from the human-readable message.
+ * #define and use CRLF macro, fix some tabs/spaces issues
+ * in date_to_tm, use 70 not 50 as the cutoff date (makes sense, 1970)
+ * adapt some code from Squid to return -1 in date_to_tm on invalid dates
+   (seconds > 59, etc...)
+ * implement ConcealServerIdentity
+ * treat headers with blank content as non-error but do not parse them
+   
 ** Changes from 0.94.12 to 0.94.13
  * Change many instances of log_error_mesg + exit to DIE macro
  * Change all instance of log_error_mesg (without exit) to WARN macro
@@ -229,6 +261,8 @@
  * make getsockname non-fatal, and do it every time because we may
    need it for the CGI
  * some minor refactoring optimizations in hash.c
+ * enlarge MMAP hash table to 1024 from 256, and enlarge other
+   mmap-related hash table #defines appropriately (4x, or (x+1)*4-1)
 
 ** Changes from 0.94.11 to 0.94.12
  * Renamed Changelog ChangeLog, and moved up to top-level directory
@@ -439,6 +473,7 @@
  * use backported index_dir.c from 0.95
  * support subdirectories in ScriptAlias directories
  * add SinglePostLimit (int, in Kilobytes) to config system
+ * add CGIPath configuration to set the CGI's PATH variable.
  * check for ENOSPC on body write
  * use environment variable TMP (or "/tmp" if not available),
    and chdir there when boa exits.

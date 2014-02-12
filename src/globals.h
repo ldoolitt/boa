@@ -20,7 +20,7 @@
  *
  */
 
-/* $Id: globals.h,v 1.65.2.25 2003/12/09 04:17:22 jnelson Exp $*/
+/* $Id: globals.h,v 1.65.2.27 2004/03/05 03:41:33 jnelson Exp $*/
 
 #ifndef _GLOBALS_H
 #define _GLOBALS_H
@@ -71,10 +71,8 @@ enum RESPONSE_CODE { R_CONTINUE = 100,
                      R_GONE,
                      R_LENGTH_REQUIRED,
                      R_PRECONDITION_FAILED,
-                     R_413,
-                     R_REQUEST_URI_TOO_LONG,
-                     R_415,
-                     R_INVALID_RANGE,
+                     R_REQUEST_URI_TOO_LONG = 414,
+                     R_INVALID_RANGE = 416,
                      R_ERROR = 500,
                      R_NOT_IMP,
                      R_BAD_GATEWAY,
@@ -252,7 +250,9 @@ extern char *cachedir;
 extern const char *tempdir;
 
 extern char *cgi_path;
+extern short common_cgi_env_count;
 extern int single_post_limit;
+extern int conceal_server_identity;
 
 extern int unsigned ka_timeout;
 extern int unsigned default_timeout;

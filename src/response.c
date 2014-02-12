@@ -20,12 +20,11 @@
  *
  */
 
-/* $Id: response.c,v 1.41.2.13 2003/11/26 05:10:48 jnelson Exp $*/
+/* $Id: response.c,v 1.41.2.16 2004/03/05 03:41:33 jnelson Exp $*/
 
 #include "boa.h"
 
 #define HTML "text/html; charset=ISO-8859-1"
-#define CRLF "\r\n"
 
 const char *http_ver_string(enum HTTP_VERSION ver)
 {
@@ -59,7 +58,7 @@ void print_content_type(request * req)
             req_write( req, "; charset=");
             req_write( req, default_charset);
         }
-        req_write(req, "\r\n");
+        req_write(req, CRLF);
     }
 }
 
@@ -67,13 +66,13 @@ void print_content_length(request * req)
 {
     req_write(req, "Content-Length: ");
     req_write(req, simple_itoa(req->filesize));
-    req_write(req, "\r\n");
+    req_write(req, CRLF);
 }
 
 void print_last_modified(request * req)
 {
     static char lm[] = "Last-Modified: "
-        "                             " "\r\n";
+        "                             " CRLF;
     rfc822_time_buf(lm + 15, req->last_modified);
     req_write(req, lm);
 }
@@ -82,24 +81,29 @@ void print_ka_phrase(request * req)
 {
     if (req->kacount > 0 &&
         req->keepalive == KA_ACTIVE && req->response_status < 500) {
-        req_write(req, "Connection: Keep-Alive\r\nKeep-Alive: timeout=");
+        /* FIXME: Should we only print one or the other if we are HTTP
+         * version between 1.0 (incl.) and 1.1 (not incl.) ?
+         */
+        req_write(req, "Connection: Keep-Alive" CRLF "Keep-Alive: timeout=");
         req_write(req, simple_itoa(ka_timeout));
         req_write(req, ", max=");
         req_write(req, simple_itoa(req->kacount));
-        req_write(req, "\r\n");
+        req_write(req, CRLF);
     } else
-        req_write(req, "Connection: close\r\n");
+        req_write(req, "Connection: close" CRLF);
 }
 
 void print_http_headers(request * req)
 {
-    static char stuff[] = "Date: "
-        "                             "
-        "\r\nServer: " SERVER_VERSION "\r\n";
+    static char date_header[] = "Date: "
+        "                             " CRLF;
+    static char server_header[] = "Server: " SERVER_VERSION CRLF;
 
-    rfc822_time_buf(stuff + 6, 0);
-    req_write(req, stuff);
-    req_write(req, "Accept-Ranges: bytes\r\n");
+    rfc822_time_buf(date_header + 6, 0);
+    req_write(req, date_header);
+    if (!conceal_server_identity)
+        req_write(req, server_header);
+    req_write(req, "Accept-Ranges: bytes" CRLF);
     print_ka_phrase(req);
 }
 
@@ -123,9 +127,6 @@ void print_partial_content_continue(request * req)
     }
     print_content_type(req);
     print_content_range(req);
-    req_write(req, "Content-Length: ");
-    req_write(req, simple_itoa(req->ranges->stop - req->ranges->start + 1));
-    req_write(req, "\r\n");
 }
 
 void print_partial_content_done(request * req)
@@ -155,7 +156,6 @@ int complete_response(request *req)
             req_write(req, CRLF);
         } else {
             print_partial_content_done(req);
-            req_write(req, CRLF);
             req->status = DONE;
             req_flush(req);
         }
@@ -189,14 +189,14 @@ void send_r_request_ok(request * req)
         return;
 
     req_write(req, http_ver_string(req->http_version));
-    req_write(req, " 200 OK\r\n");
+    req_write(req, " 200 OK" CRLF);
     print_http_headers(req);
 
     if (!req->cgi_type) {
         print_content_length(req);
         print_last_modified(req);
         print_content_type(req);
-        req_write(req, "\r\n");
+        req_write(req, CRLF);
     }
 }
 
@@ -223,7 +223,7 @@ void send_r_no_content(request * req)
 void send_r_partial_content(request * req)
 {
     static char msg[] = " 206 Partial Content" CRLF;
-    static char msg2[] = "Content-type: multipart/byteranges; "
+    static char msg2[] = "Content-Type: multipart/byteranges; "
         "boundary=THIS_STRING_SEPARATES" CRLF;
 
     req->response_status = R_PARTIAL_CONTENT;
@@ -241,9 +241,14 @@ void send_r_partial_content(request * req)
     print_last_modified(req);
     if (req->numranges > 1) {
         req_write(req, msg2);
+        req_write(req, CRLF);
+    } else {
+        req_write(req, "Content-Length: ");
+        req_write(req, simple_itoa(req->ranges->stop - req->ranges->start + 1));
+        req_write(req, CRLF);
     }
-    req_write(req, CRLF);
     print_partial_content_continue(req);
+    req_write(req, CRLF);
 }
 
 
@@ -254,13 +259,13 @@ void send_r_moved_perm(request * req, const char *url)
     req->response_status = R_MOVED_PERM;
     if (req->http_version != HTTP09) {
         req_write(req, http_ver_string(req->http_version));
-        req_write(req, " 301 Moved Permanently\r\n");
+        req_write(req, " 301 Moved Permanently" CRLF);
         print_http_headers(req);
-        req_write(req, "Content-Type: " HTML "\r\n");
+        req_write(req, "Content-Type: " HTML CRLF);
 
         req_write(req, "Location: ");
         req_write_escape_http(req, url);
-        req_write(req, "\r\n\r\n");
+        req_write(req, CRLF CRLF);
     }
     if (req->method != M_HEAD) {
         req_write(req,
@@ -280,15 +285,15 @@ void send_r_moved_temp(request * req, const char *url, const char *more_hdr)
     req->response_status = R_MOVED_TEMP;
     if (req->http_version != HTTP09) {
         req_write(req, http_ver_string(req->http_version));
-        req_write(req, " 302 Moved Temporarily\r\n");
+        req_write(req, " 302 Moved Temporarily" CRLF);
         print_http_headers(req);
-        req_write(req, "Content-Type: " HTML "\r\n");
+        req_write(req, "Content-Type: " HTML CRLF);
 
         req_write(req, "Location: ");
         req_write_escape_http(req, url);
-        req_write(req, "\r\n");
+        req_write(req, CRLF);
         req_write(req, more_hdr);
-        req_write(req, "\r\n\r\n");
+        req_write(req, CRLF CRLF);
     }
     if (req->method != M_HEAD) {
         req_write(req,
@@ -307,10 +312,10 @@ void send_r_not_modified(request * req)
     SQUASH_KA(req);
     req->response_status = R_NOT_MODIFIED;
     req_write(req, http_ver_string(req->http_version));
-    req_write(req, " 304 Not Modified\r\n");
+    req_write(req, " 304 Not Modified" CRLF);
     print_http_headers(req);
     print_content_type(req);
-    req_write(req, "\r\n");
+    req_write(req, CRLF);
     req_flush(req);
 }
 
@@ -321,9 +326,9 @@ void send_r_bad_request(request * req)
     req->response_status = R_BAD_REQUEST;
     if (req->http_version != HTTP09) {
         req_write(req, http_ver_string(req->http_version));
-        req_write(req, " 400 Bad Request\r\n");
+        req_write(req, " 400 Bad Request" CRLF);
         print_http_headers(req);
-        req_write(req, "Content-Type: " HTML "\r\n\r\n"); /* terminate header */
+        req_write(req, "Content-Type: " HTML CRLF CRLF); /* terminate header */
     }
     if (req->method != M_HEAD)
         req_write(req,
@@ -340,12 +345,12 @@ void send_r_unauthorized(request * req, const char *realm_name)
     req->response_status = R_UNAUTHORIZED;
     if (req->http_version != HTTP09) {
         req_write(req, http_ver_string(req->http_version));
-        req_write(req, " 401 Unauthorized\r\n");
+        req_write(req, " 401 Unauthorized" CRLF);
         print_http_headers(req);
         req_write(req, "WWW-Authenticate: Basic realm=\"");
         req_write(req, realm_name);
-        req_write(req, "\"\r\n");
-        req_write(req, "Content-Type: " HTML "\r\n\r\n"); /* terminate header */
+        req_write(req, CRLF);
+        req_write(req, "Content-Type: " HTML CRLF CRLF); /* terminate header */
     }
     if (req->method != M_HEAD) {
         req_write(req,
@@ -365,9 +370,9 @@ void send_r_forbidden(request * req)
     req->response_status = R_FORBIDDEN;
     if (req->http_version != HTTP09) {
         req_write(req, http_ver_string(req->http_version));
-        req_write(req, " 403 Forbidden\r\n");
+        req_write(req, " 403 Forbidden" CRLF);
         print_http_headers(req);
-        req_write(req, "Content-Type: " HTML "\r\n\r\n"); /* terminate header */
+        req_write(req, "Content-Type: " HTML CRLF CRLF); /* terminate header */
     }
     if (req->method != M_HEAD) {
         req_write(req, "<HTML><HEAD><TITLE>403 Forbidden</TITLE></HEAD>\n"
@@ -386,9 +391,9 @@ void send_r_not_found(request * req)
     req->response_status = R_NOT_FOUND;
     if (req->http_version != HTTP09) {
         req_write(req, http_ver_string(req->http_version));
-        req_write(req, " 404 Not Found\r\n");
+        req_write(req, " 404 Not Found" CRLF);
         print_http_headers(req);
-        req_write(req, "Content-Type: " HTML "\r\n\r\n"); /* terminate header */
+        req_write(req, "Content-Type: " HTML CRLF CRLF); /* terminate header */
     }
     if (req->method != M_HEAD) {
         req_write(req, "<HTML><HEAD><TITLE>404 Not Found</TITLE></HEAD>\n"
@@ -504,9 +509,9 @@ void send_r_error(request * req)
     req->response_status = R_ERROR;
     if (req->http_version != HTTP09) {
         req_write(req, http_ver_string(req->http_version));
-        req_write(req, " 500 Server Error\r\n");
+        req_write(req, " 500 Server Error" CRLF);
         print_http_headers(req);
-        req_write(req, "Content-Type: " HTML "\r\n\r\n"); /* terminate header */
+        req_write(req, "Content-Type: " HTML CRLF CRLF); /* terminate header */
     }
     if (req->method != M_HEAD) {
         req_write(req,
@@ -525,9 +530,9 @@ void send_r_not_implemented(request * req)
     req->response_status = R_NOT_IMP;
     if (req->http_version != HTTP09) {
         req_write(req, http_ver_string(req->http_version));
-        req_write(req, " 501 Not Implemented\r\n");
+        req_write(req, " 501 Not Implemented" CRLF);
         print_http_headers(req);
-        req_write(req, "Content-Type: " HTML "\r\n\r\n"); /* terminate header */
+        req_write(req, "Content-Type: " HTML CRLF CRLF); /* terminate header */
     }
     /* we always write the body, because we don't *KNOW*
      * what the method is.
@@ -565,8 +570,9 @@ void send_r_service_unavailable(request * req)
     static char body[] =
         "<HTML><HEAD><TITLE>503 Service Unavailable</TITLE></HEAD>\n"
         "<BODY><H1>503 Service Unavailable</H1>\n"
-        "There are too many connections in use right now.\r\n"
-        "Please try again later.\r\n</BODY></HTML>\n";
+        "There are too many connections in use right now.\n"
+	"Please try again later.\n"
+	"</BODY></HTML>\n";
     static unsigned int _body_len;
     static char *body_len;
 
@@ -584,15 +590,14 @@ void send_r_service_unavailable(request * req)
     req->response_status = R_SERVICE_UNAV;
     if (req->http_version != HTTP09) {
         req_write(req, http_ver_string(req->http_version));
-        req_write(req, " 503 Service Unavailable\r\n");
+        req_write(req, " 503 Service Unavailable" CRLF);
         print_http_headers(req);
         if (body_len) {
             req_write(req, "Content-Length: ");
             req_write(req, body_len);
-            req_write(req, "\r\n");
+            req_write(req, CRLF);
         }
-        req_write(req, "Content-Type: " HTML "\r\n\r\n"); /* terminate header
-                                                           */
+        req_write(req, "Content-Type: " HTML CRLF CRLF); /* terminate header */
     }
     if (req->method != M_HEAD) {
         req_write(req, body);
@@ -608,9 +613,9 @@ void send_r_bad_version(request * req, const char *version)
     req->response_status = R_BAD_VERSION;
     if (req->http_version != HTTP09) {
         req_write(req, http_ver_string(req->http_version));
-        req_write(req, " 505 HTTP Version Not Supported\r\n");
+        req_write(req, " 505 HTTP Version Not Supported" CRLF);
         print_http_headers(req);
-        req_write(req, "Content-Type: " HTML "\r\n\r\n"); /* terminate header */
+        req_write(req, "Content-Type: " HTML CRLF CRLF); /* terminate header */
     }
     if (req->method != M_HEAD) {
         req_write(req,

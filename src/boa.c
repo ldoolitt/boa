@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: boa.c,v 1.99.2.18 2003/10/05 03:42:19 jnelson Exp $*/
+/* $Id: boa.c,v 1.99.2.20 2004/01/22 04:11:52 jnelson Exp $*/
 
 #include "boa.h"
 
@@ -60,6 +60,12 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
+    /* but first, update timestamp, because log_error_time uses it */
+    (void) time(&current_time);
+
+    /* set timezone right away */
+    tzset();
+
     {
         int devnullfd = -1;
         devnullfd = open("/dev/null", 0);
@@ -76,16 +82,13 @@ int main(int argc, char *argv[])
         close(devnullfd);
     }
 
-    /* but first, update timestamp, because log_error_time uses it */
-    (void) time(&current_time);
-
     parse_commandline(argc,argv);
     fixup_server_root();
+    create_common_env();
     read_config_files();
     open_logs();
     server_s = create_server_socket();
     init_signals();
-    create_common_env();
     build_needs_escape();
 
     /* background ourself */

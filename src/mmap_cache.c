@@ -18,13 +18,13 @@
  *
  */
 
-/* $Id: mmap_cache.c,v 1.9.2.5 2003/10/05 03:40:43 jnelson Exp $*/
+/* $Id: mmap_cache.c,v 1.9.2.6 2003/12/24 05:26:58 jnelson Exp $*/
 
 #include "boa.h"
 
-int mmap_list_entries_used = 0;
-int mmap_list_total_requests = 0;
-int mmap_list_hash_bounces = 0;
+static int mmap_list_entries_used = 0;
+static int mmap_list_total_requests = 0;
+static int mmap_list_hash_bounces = 0;
 
 #define MMAP_LIST_NEXT(i) (((i)+1)&MMAP_LIST_MASK)
 #define MMAP_LIST_HASH(dev,ino,size) ((ino)&MMAP_LIST_MASK)

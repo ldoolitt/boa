@@ -21,16 +21,19 @@
  *
  */
 
-/* $Id: cgi.c,v 1.83.2.22 2003/10/05 04:15:29 jnelson Exp $ */
+/* $Id: cgi.c,v 1.83.2.25 2004/03/01 05:35:43 jnelson Exp $ */
 
 #include "boa.h"
 
 static char *env_gen_extra(const char *key, const char *value,
                            unsigned int extra);
+static void create_argv(request * req, char **aargv);
+static int complete_env(request * req);
 
 int verbose_cgi_logs = 0;
 /* The +1 is for the the NULL in complete_env */
-static char *common_cgi_env[COMMON_CGI_COUNT + 1];
+static char **common_cgi_env = NULL;
+short common_cgi_env_count = 0;
 
 /*
  * Name: create_common_env
@@ -41,7 +44,13 @@ static char *common_cgi_env[COMMON_CGI_COUNT + 1];
 
 void create_common_env(void)
 {
-    int ix = 0, i;
+    int i;
+    common_cgi_env = calloc((COMMON_CGI_COUNT + 1),sizeof(char *));
+    common_cgi_env_count = 0;
+
+    if (common_cgi_env == NULL) {
+        DIE("unable to allocate memory for common_cgi_env");
+    }
 
     /* NOTE NOTE NOTE:
        If you (the reader) someday modify this chunk of code to
@@ -57,46 +66,67 @@ void create_common_env(void)
        "In all cases, a missing environment variable is
        equivalent to a zero-length (NULL) value, and vice versa."
      */
-    common_cgi_env[ix++] = env_gen_extra("PATH",
+    common_cgi_env[common_cgi_env_count++] = env_gen_extra("PATH",
                                          ((cgi_path !=
                                            NULL) ? cgi_path :
                                           DEFAULT_PATH), 0);
-    common_cgi_env[ix++] =
+    common_cgi_env[common_cgi_env_count++] =
         env_gen_extra("SERVER_SOFTWARE", SERVER_VERSION, 0);
-    common_cgi_env[ix++] = env_gen_extra("SERVER_NAME", server_name, 0);
-    common_cgi_env[ix++] =
+    common_cgi_env[common_cgi_env_count++] = env_gen_extra("SERVER_NAME", server_name, 0);
+    common_cgi_env[common_cgi_env_count++] =
         env_gen_extra("GATEWAY_INTERFACE", CGI_VERSION, 0);
 
-    common_cgi_env[ix++] =
+    common_cgi_env[common_cgi_env_count++] =
         env_gen_extra("SERVER_PORT", simple_itoa(server_port), 0);
 
     /* NCSA and APACHE added -- not in CGI spec */
 #ifdef USE_NCSA_CGI_ENV
-    common_cgi_env[ix++] =
+    common_cgi_env[common_cgi_env_count++] =
         env_gen_extra("DOCUMENT_ROOT", document_root, 0);
 
     /* NCSA added */
-    common_cgi_env[ix++] = env_gen_extra("SERVER_ROOT", server_root, 0);
+    common_cgi_env[common_cgi_env_count++] = env_gen_extra("SERVER_ROOT", server_root, 0);
 #endif
 
     /* APACHE added */
-    common_cgi_env[ix++] = env_gen_extra("SERVER_ADMIN", server_admin, 0);
-    common_cgi_env[ix] = NULL;
+    common_cgi_env[common_cgi_env_count++] = env_gen_extra("SERVER_ADMIN", server_admin, 0);
+    common_cgi_env[common_cgi_env_count] = NULL;
 
     /* Sanity checking -- make *sure* the memory got allocated */
-    if (ix != COMMON_CGI_COUNT) {
+    if (common_cgi_env_count != COMMON_CGI_COUNT) {
         log_error_time();
         fprintf(stderr, "COMMON_CGI_COUNT not high enough.\n");
         exit(1);
     }
 
-    for (i = 0; i < ix; ++i) {
+    for (i = 0; i < common_cgi_env_count; ++i) {
         if (common_cgi_env[i] == NULL) {
             log_error_time();
             fprintf(stderr,
                     "Unable to allocate a component of common_cgi_env - out of memory.\n");
             exit(1);
         }
+    }
+}
+
+void add_to_common_env(char *key, char *value)
+{
+    common_cgi_env = realloc(common_cgi_env, (common_cgi_env_count + 2) * (sizeof(char *)));
+    if (common_cgi_env== NULL) {
+        DIE("Unable to allocate memory for common CGI environment variable.");
+    }
+    common_cgi_env[common_cgi_env_count] = env_gen_extra(key,value, 0);
+    if (common_cgi_env[common_cgi_env_count] == NULL) {
+        /* errors already reported */
+        DIE("memory allocation failure in add_to_common_env");
+    }
+    common_cgi_env[++common_cgi_env_count] = NULL;
+    /* I find it hard to believe that somebody would actually
+     * make 90+ *common* CGI variables, but it's always better
+     * to be safe.
+     */
+    if (common_cgi_env_count > CGI_ENV_MAX) {
+        DIE("far too many common CGI environment variables added.");
     }
 }
 
@@ -196,7 +226,7 @@ int add_cgi_env(request * req, const char *key, const char *value,
  * and terminates the environment array
  */
 
-int complete_env(request * req)
+static int complete_env(request * req)
 {
     int i;
 
@@ -278,7 +308,7 @@ int complete_env(request * req)
  *
  */
 
-void create_argv(request * req, char **aargv)
+static void create_argv(request * req, char **aargv)
 {
     char *p, *q, *r;
     int aargc;
@@ -385,14 +415,13 @@ int init_cgi(request * req)
             return 0;
         }
     }
-#ifdef FASCIST_LOGGING
-    {
+    DEBUG(DEBUG_CGI_ENV) {
         int i;
         for (i = 0; i < req->cgi_env_index; ++i)
+            log_error_time();
             fprintf(stderr, "%s - environment variable for cgi: \"%s\"\n",
                     __FILE__, req->cgi_env[i]);
     }
-#endif
 
     /* we want to use pipes whenever it's a CGI or directory */
     /* otherwise (NPH, gunzip) we want no pipes */
@@ -420,17 +449,15 @@ int init_cgi(request * req)
     switch (child_pid) {
     case -1:
         /* fork unsuccessful */
-        log_error_doc(req);
-        perror("fork");
-
+        /* FIXME: There is a problem here. send_r_error (called by
+         * boa_perror) would work for NPH and CGI, but not for GUNZIP.  
+         * Fix that. 
+         */
+        boa_perror(req, "fork failed");
         if (use_pipes) {
             close(pipes[0]);
             close(pipes[1]);
         }
-        send_r_error(req);
-        /* FIXME: There is a problem here. send_r_error would work
-           for NPH and CGI, but not for GUNZIP.  Fix that. */
-        /* I'd like to send_r_error, but.... */
         return 0;
         break;
     case 0:
@@ -584,12 +611,14 @@ int init_cgi(request * req)
         /*
          * tie STDERR to cgi_log_fd
          * cgi_log_fd will automatically close, close-on-exec rocks!
-         * if we don't tied STDERR (current log_error) to cgi_log_fd,
-         *  then we ought to close it.
+         * if we don't tie STDERR (current log_error) to cgi_log_fd,
+         *  then we ought to tie it to /dev/null
+         *  FIXME: we currently don't tie it to /dev/null, we leave it
+         *  tied to whatever 'error_log' points to.  This means CGIs can
+         *  scribble on the error_log, probably a bad thing.
          */
         if (cgi_log_fd) {
             dup2(cgi_log_fd, STDERR_FILENO);
-            close(cgi_log_fd);
         }
 
         if (req->cgi_type) {

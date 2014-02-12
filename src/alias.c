@@ -21,7 +21,7 @@
  *
  */
 
-/* $Id: alias.c,v 1.70.2.15 2003/10/05 03:39:20 jnelson Exp $ */
+/* $Id: alias.c,v 1.70.2.16 2003/12/24 05:21:55 jnelson Exp $ */
 
 #include "boa.h"
 
@@ -202,7 +202,7 @@ static alias *find_alias(char *uri, unsigned int urilen)
               (uri[current->fake_len] == '\0' ||
                uri[current->fake_len] == '/')))) {
             DEBUG(DEBUG_ALIAS) {
-                fprintf(stderr, "Got it!\n");
+                fprintf(stderr, "Got it! (%s)\n", current->realname);
             }
             return current;
         } else {
@@ -275,9 +275,7 @@ int translate_uri(request * req)
         } else {                /* Alias */
             req->pathname = strdup(buffer);
             if (!req->pathname) {
-                log_error_doc(req);
-                fputs("unable to strdup buffer onto req->pathname\n", stderr);
-                send_r_error(req);
+                boa_perror(req, "unable to strdup buffer onto req->pathname");
                 return 0;
             }
             return 1;
@@ -407,9 +405,7 @@ int translate_uri(request * req)
 
     req->pathname = strdup(buffer);
     if (!req->pathname) {
-        log_error_doc(req);
-        fputs("Could not strdup buffer for req->pathname!\n", stderr);
-        send_r_error(req);
+        boa_perror(req, "Could not strdup buffer for req->pathname!");
         return 0;
     }
 
@@ -428,9 +424,7 @@ int translate_uri(request * req)
         /* script_name could end up as /cgi-bin/bob/extra_path */
         req->script_name = strdup(req->request_uri);
         if (!req->script_name) {
-            log_error_doc(req);
-            fputs("Could not strdup req->request_uri for req->script_name.\n", stderr);
-            send_r_error(req);
+            boa_perror(req, "Could not strdup req->request_uri for req->script_name.");
             return 0;
         }
         if (req->http_version == HTTP09)
@@ -564,9 +558,7 @@ static int init_script_alias(request * req, alias * current1, unsigned int uri_l
 
     req->script_name = strdup(req->request_uri);
     if (!req->script_name) {
-        log_error_doc(req);
-        fputs("unable to strdup req->request_uri for req->script_name\n", stderr);
-        send_r_error(req);
+        boa_perror(req, "unable to strdup req->request_uri for req->script_name");
         return 0;
     }
 
@@ -602,9 +594,7 @@ static int init_script_alias(request * req, alias * current1, unsigned int uri_l
 
         req->path_info = strdup(pathname + i);
         if (!req->path_info) {
-            log_error_doc(req);
-            fputs("unable to strdup pathname + index for req->path_info\n", stderr);
-            send_r_error(req);
+            boa_perror(req, "unable to strdup pathname + index for req->path_info");
             return 0;
         }
         pathname[i] = '\0'; /* strip path_info from path */
@@ -644,9 +634,7 @@ static int init_script_alias(request * req, alias * current1, unsigned int uri_l
                        path_len - current->fake_len + 1); /* +1 for NUL */
                 req->path_translated = strdup(buffer);
                 if (!req->path_translated) {
-                    log_error_doc(req);
-                    fputs("unable to strdup buffer for req->path_translated\n", stderr);
-                    send_r_error(req);
+                    boa_perror(req, "unable to strdup buffer for req->path_translated");
                     return 0;
                 }
             }
@@ -678,9 +666,7 @@ static int init_script_alias(request * req, alias * current1, unsigned int uri_l
 
                 req->path_translated = malloc(l1 + 1 + l2 + l3 + 1);
                 if (req->path_translated == NULL) {
-                    log_error_doc(req);
-                    fputs("unable to malloc memory for req->path_translated\n", stderr);
-                    send_r_error(req);
+                    boa_perror(req, "unable to malloc memory for req->path_translated");
                     return 0;
                 }
                 memcpy(req->path_translated, user_homedir, l1);
@@ -697,9 +683,7 @@ static int init_script_alias(request * req, alias * current1, unsigned int uri_l
 
             req->path_translated = malloc(l1 + l2 + 1);
             if (req->path_translated == NULL) {
-                log_error_doc(req);
-                fputs("unable to malloc memory for req->path_translated\n", stderr);
-                send_r_error(req);
+                boa_perror(req, "unable to malloc memory for req->path_translated");
                 return 0;
             }
             memcpy(req->path_translated, document_root, l1);
@@ -709,9 +693,7 @@ static int init_script_alias(request * req, alias * current1, unsigned int uri_l
 
     req->pathname = strdup(pathname);
     if (!req->pathname) {
-        log_error_doc(req);
-        fputs("unable to strdup pathname for req->pathname", stderr);
-        send_r_error(req);
+        boa_perror(req, "unable to strdup pathname for req->pathname");
         return 0;
     }
 
