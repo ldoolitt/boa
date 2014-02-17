@@ -77,7 +77,7 @@ void range_pool_push(Range * r)
     range_pool = r;
 }
 
-static void range_abort(request * req)
+void range_abort(request * req)
 {
     /* free all ranges starting with head */
     ranges_reset(req);

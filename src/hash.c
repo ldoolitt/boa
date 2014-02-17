@@ -54,6 +54,7 @@ static hash_struct *mime_hashtable[MIME_HASHTABLE_SIZE];
 static hash_struct *passwd_hashtable[PASSWD_HASHTABLE_SIZE];
 void add_mime_type(const char *extension, const char *type);
 static unsigned get_homedir_hash_value(const char *name);
+static unsigned get_mime_hash_value(const char *extension);
 
 #ifdef WANT_ICKY_HASH
 static unsigned four_char_hash(const char *buf);
@@ -393,7 +394,7 @@ void add_mime_type(const char *extension, const char *type)
  * and mods by the hashtable size to get the hash value
  */
 
-unsigned get_mime_hash_value(const char *extension)
+static unsigned get_mime_hash_value(const char *extension)
 {
     return boa_hash(extension) % MIME_HASHTABLE_SIZE;
 }

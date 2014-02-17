@@ -62,7 +62,7 @@ void print_content_type(request * req)
     }
 }
 
-void print_content_length(request * req)
+static void print_content_length(request * req)
 {
     req_write(req, "Content-Length: ");
     req_write(req, simple_itoa(req->filesize));
@@ -129,7 +129,7 @@ void print_partial_content_continue(request * req)
     print_content_range(req);
 }
 
-void print_partial_content_done(request * req)
+static void print_partial_content_done(request * req)
 {
     static char msg[] = CRLF "--THIS_STRING_SEPARATES--" CRLF;
 
