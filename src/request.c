@@ -28,7 +28,9 @@ unsigned total_connections = 0;
 unsigned int system_bufsize = 0; /* Default size of SNDBUF given by system */
 struct status status;
 
+#ifdef TUNE_SNDBUF
 static unsigned int sockbufsize = SOCKETBUF_SIZE;
+#endif
 
 /* function prototypes located in this file only */
 static void free_request(request * req);
