@@ -50,8 +50,8 @@ int read_header(request * req)
         if (check < (buffer + bytes)) {
             buffer[bytes] = '\0';
             log_error_time();
-            fprintf(stderr, "%s:%d - Parsing headers (\"%s\")\n",
-                    __FILE__, __LINE__, check);
+            fprintf(stderr, SOURCE_MARKER " - Parsing headers (\"%s\")\n",
+                    check);
         }
     }
     while (check < (buffer + bytes)) {
@@ -146,8 +146,7 @@ int read_header(request * req)
 #ifdef VERY_FASCIST_LOGGING
             int retval;
             log_error_time();
-            fprintf(stderr, "%s:%d -- got to body read.\n",
-                    __FILE__, __LINE__);
+            fprintf(stderr, SOURCE_MARKER " - got to body read.\n");
             retval = process_header_end(req);
 #else
             int retval = process_header_end(req);
@@ -218,8 +217,8 @@ int read_header(request * req)
 
 #ifdef VERY_FASCIST_LOGGING
     log_error_time();
-    fprintf(stderr, "%s:%d - Done processing buffer.  Status: %d\n",
-            __FILE__, __LINE__, req->status);
+    fprintf(stderr, SOURCE_MARKER " - Done processing buffer.  Status: %d\n",
+            req->status);
 #endif
 
     if (req->status < BODY_READ) {
@@ -273,8 +272,8 @@ int read_header(request * req)
         DEBUG(DEBUG_HEADER_READ) {
             log_error_time();
             req->client_stream[req->client_stream_pos] = '\0';
-            fprintf(stderr, "%s:%d -- We read %d bytes: \"%s\"\n",
-                    __FILE__, __LINE__, bytes,
+            fprintf(stderr, SOURCE_MARKER " - We read %d bytes: \"%s\"\n",
+                    bytes,
 #ifdef VERY_FASCIST_LOGGING2
                     req->client_stream + req->client_stream_pos - bytes
 #else
@@ -336,8 +335,7 @@ int read_body(request * req)
     } else if (bytes_read == 0) {
         /* this is an error.  premature end of body! */
         log_error_doc(req);
-        fprintf(stderr, "%s:%d - Premature end of body!!\n",
-                __FILE__, __LINE__);
+        fprintf(stderr, SOURCE_MARKER " - Premature end of body!!\n");
         send_r_bad_request(req);
         return 0;
     }
@@ -346,8 +344,8 @@ int read_body(request * req)
 
 #ifdef FASCIST_LOGGING1
     log_error_time();
-    fprintf(stderr, "%s:%d - read %d bytes.\n",
-            __FILE__, __LINE__, bytes_to_read);
+    fprintf(stderr, SOURCE_MARKER " - read %d bytes.\n",
+            bytes_to_read);
 #endif
 
     req->header_end += bytes_read;
@@ -402,8 +400,7 @@ int write_body(request * req)
     }
     DEBUG(DEBUG_HEADER_READ) {
         log_error_time();
-        fprintf(stderr, "%s:%d - wrote %d bytes of CGI body. %ld of %ld\n",
-                __FILE__, __LINE__,
+        fprintf(stderr, SOURCE_MARKER " - wrote %d bytes of CGI body. %ld of %ld\n",
                 bytes_written, req->filepos, req->filesize);
     }
 
@@ -417,8 +414,8 @@ int write_body(request * req)
 
             req->header_line[bytes_written] = '\0';
             fprintf(stderr,
-                    "%s:%d - wrote %d bytes (%s). %lu of %lu\n",
-                    __FILE__, __LINE__, bytes_written,
+                    SOURCE_MARKER " - wrote %d bytes (%s). %lu of %lu\n",
+                    bytes_written,
                     req->header_line, req->filepos, req->filesize);
             req->header_line[bytes_written] = c;
         }

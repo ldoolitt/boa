@@ -419,8 +419,8 @@ int init_cgi(request * req)
         int i;
         for (i = 0; i < req->cgi_env_index; ++i)
             log_error_time();
-            fprintf(stderr, "%s - environment variable for cgi: \"%s\"\n",
-                    __FILE__, req->cgi_env[i]);
+            fprintf(stderr, SOURCE_MARKER " - environment variable for cgi: \"%s\"\n",
+                    req->cgi_env[i]);
     }
 
     /* we want to use pipes whenever it's a CGI or directory */

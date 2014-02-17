@@ -99,8 +99,8 @@ void add_alias(const char *fakename, const char *realname, enum ALIAS type)
 
     DEBUG(DEBUG_ALIAS) {
         log_error_time();
-        fprintf(stderr, "%s:%d - Going to add alias: \"%s\" -=> \"%s\" (hash: %u)\n",
-                __FILE__, __LINE__, fakename, realname, hash);
+        fprintf(stderr, SOURCE_MARKER " - Going to add alias: \"%s\" -=> \"%s\" (hash: %u)\n",
+                fakename, realname, hash);
     }
 
     old = alias_hashtable[hash];
@@ -141,8 +141,8 @@ void add_alias(const char *fakename, const char *realname, enum ALIAS type)
     DEBUG(DEBUG_ALIAS) {
         log_error_time();
         fprintf(stderr,
-                "%s:%d - ADDED alias: \"%s\" -=> \"%s\" hash: %u\n",
-                __FILE__, __LINE__, fakename, realname, hash);
+                SOURCE_MARKER " - ADDED alias: \"%s\" -=> \"%s\" hash: %u\n",
+                fakename, realname, hash);
     }
 }
 
@@ -173,8 +173,8 @@ static alias *find_alias(char *uri, unsigned int urilen)
     DEBUG(DEBUG_ALIAS) {
         log_error_time();
         fprintf(stderr,
-                "%s:%d - looking for \"%s\" (hash=%u,len=%u)...\n",
-                __FILE__, __LINE__, uri, hash, urilen);
+                SOURCE_MARKER " - looking for \"%s\" (hash=%u,len=%u)...\n",
+                uri, hash, urilen);
     }
 
     current = alias_hashtable[hash];
@@ -182,8 +182,8 @@ static alias *find_alias(char *uri, unsigned int urilen)
         DEBUG(DEBUG_ALIAS) {
             log_error_time();
             fprintf(stderr,
-                    "%s:%d - comparing \"%s\" (request) to \"%s\" (alias): ",
-                    __FILE__, __LINE__, uri, current->fakename);
+                    SOURCE_MARKER " - comparing \"%s\" (request) to \"%s\" (alias): ",
+                    uri, current->fakename);
         }
         /* current->fake_len must always be:
          *  shorter or equal to the uri
@@ -411,11 +411,10 @@ int translate_uri(request * req)
 
 #ifdef FASCIST_LOGGING
         log_error_time();
-        fprintf(stderr, "%s:%d - buffer is: \"%s\"\n",
-                __FILE__, __LINE__, buffer);
+        fprintf(stderr, SOURCE_MARKER " - buffer is: \"%s\"\n", buffer);
         log_error_time();
-        fprintf(stderr, "%s:%d - compare \"%s\" and \"%s\": %d\n",
-                __FILE__, __LINE__, get_mime_type(buffer), CGI_MIME_TYPE, strcmp(CGI_MIME_TYPE, get_mime_type(buffer)));
+        fprintf(stderr, SOURCE_MARKER " - compare \"%s\" and \"%s\": %d\n",
+                get_mime_type(buffer), CGI_MIME_TYPE, strcmp(CGI_MIME_TYPE, get_mime_type(buffer)));
 #endif
 
     /* below we support cgis outside of a ScriptAlias */
@@ -511,8 +510,8 @@ static int init_script_alias(request * req, alias * current1, unsigned int uri_l
 #ifdef FASCIST_LOGGING
     log_error_time();
     fprintf(stderr,
-            "%s:%d - pathname in init_script_alias is: \"%s\" (\"%s\")\n",
-            __FILE__, __LINE__, pathname, pathname + current1->real_len);
+            SOURCE_MARKER " - pathname in init_script_alias is: \"%s\" (\"%s\")\n",
+            pathname, pathname + current1->real_len);
 #endif
     if (strncmp("nph-", pathname + current1->real_len, 4) == 0
         || (req->http_version == HTTP09))

@@ -894,7 +894,7 @@ int process_option_line(request * req)
 
 #ifdef FASCIST_LOGGING
     log_error_time();
-    fprintf(stderr, "%s:%d - Parsing \"%s\"\n", __FILE__, __LINE__, line);
+    fprintf(stderr, SOURCE_MARKER " - Parsing \"%s\"\n", line);
 #endif
 
     value = strchr(line, ':');
