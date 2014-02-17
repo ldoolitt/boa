@@ -372,10 +372,8 @@ int modified_since(time_t * mtime, const char *if_modified_since)
  * AND changes - into _
  */
 
-char *to_upper(char *str)
+void to_upper(char *str)
 {
-    char *start = str;
-
     while (*str) {
         if (*str == '-')
             *str = '_';
@@ -383,8 +381,6 @@ char *to_upper(char *str)
             *str = toupper(*str);
         str++;
     }
-
-    return start;
 }
 
 /*

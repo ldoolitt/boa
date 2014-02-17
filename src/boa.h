@@ -173,7 +173,7 @@ int unescape_uri(char *uri, char **query_string);
 int create_temporary_file(short want_unlink, char *storage, unsigned int size);
 int real_set_block_fd(int fd);
 int real_set_nonblock_fd(int fd);
-char *to_upper(char *str);
+void to_upper(char *str);
 void strlower(char *s);
 int check_host(const char *r);
 #ifndef DISABLE_DEBUG
