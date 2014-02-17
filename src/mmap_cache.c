@@ -77,7 +77,7 @@ struct mmap_entry *find_mmap(int data_fd, struct stat *s)
         return NULL;
     }
 
-    m = mmap(0, s->st_size, PROT_READ, MAP_OPTIONS, data_fd, 0);
+    m = mmap(NULL, s->st_size, PROT_READ, MAP_OPTIONS, data_fd, 0);
 
     if ((long) m == -1) {
         int saved_errno = errno;
@@ -89,7 +89,7 @@ struct mmap_entry *find_mmap(int data_fd, struct stat *s)
     }
 
 #ifdef HAVE_MADVISE
-    {
+    if (s->st_size > 16*1024*1024) /* more than 16MB */ {
         int mret;
 
         mret = madvise(m, s->st_size, MADV_SEQUENTIAL);
