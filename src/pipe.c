@@ -21,7 +21,6 @@
  *
  */
 
-/* $Id: pipe.c,v 1.39.2.16 2005/02/22 14:13:03 jnelson Exp $*/
 
 #include "boa.h"
 

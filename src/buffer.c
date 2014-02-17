@@ -20,7 +20,6 @@
  *
  */
 
-/* $Id: buffer.c,v 1.10.2.14 2005/02/22 14:11:29 jnelson Exp $ */
 
 #include "boa.h"
 #include "escape.h"

@@ -20,7 +20,6 @@
  *
  */
 
-/* $Id: compat.h,v 1.18.2.12 2005/02/22 14:11:29 jnelson Exp $*/
 
 #ifndef _COMPAT_H
 #define _COMPAT_H

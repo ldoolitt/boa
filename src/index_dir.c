@@ -17,7 +17,6 @@
  *
  */
 
-/* $Id: index_dir.c,v 1.32.2.7 2005/02/22 03:00:24 jnelson Exp $*/
 
 #include <stdio.h>
 #include <sys/stat.h>

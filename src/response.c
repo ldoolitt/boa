@@ -20,7 +20,6 @@
  *
  */
 
-/* $Id: response.c,v 1.41.2.17 2005/02/22 14:11:29 jnelson Exp $*/
 
 #include "boa.h"
 

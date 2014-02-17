@@ -19,7 +19,6 @@
  *
  */
 
-/* $Id: access.h,v 1.1.2.4 2005/02/22 14:11:29 jnelson Exp $ */
 
 #ifndef _ACCESS_H
 #define _ACCESS_H

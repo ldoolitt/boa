@@ -20,7 +20,6 @@
  *
  */
 
-/* $Id: defines.h,v 1.107.2.42 2005/02/22 14:11:29 jnelson Exp $*/
 
 #ifndef _DEFINES_H
 #define _DEFINES_H

@@ -21,7 +21,6 @@
  *
  */
 
-/* $Id: cgi.c,v 1.83.2.28 2005/02/22 14:11:29 jnelson Exp $ */
 
 #include "boa.h"
 

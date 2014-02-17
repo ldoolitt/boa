@@ -21,7 +21,6 @@
  *
  */
 
-/* $Id: escape.c,v 1.7.2.2 2004/06/04 02:45:26 jnelson Exp $ */
 
 /*
  unreserved = alnum | mark

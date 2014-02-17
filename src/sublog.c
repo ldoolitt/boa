@@ -19,7 +19,6 @@
  *
  */
 
-/* $Id: sublog.c,v 1.6.2.6 2005/02/22 14:11:29 jnelson Exp $*/
 
 #include <errno.h>
 #include <stdio.h>

@@ -20,7 +20,6 @@
  *
  */
 
-/* $Id: hash.c,v 1.14.4.15 2005/02/22 14:11:29 jnelson Exp $*/
 
 #include "boa.h"
 

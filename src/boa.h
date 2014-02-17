@@ -20,7 +20,6 @@
  *
  */
 
-/* $Id: boa.h,v 1.63.2.27 2005/02/22 14:11:29 jnelson Exp $*/
 
 #ifndef _BOA_H
 #define _BOA_H

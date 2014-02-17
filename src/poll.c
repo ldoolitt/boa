@@ -21,7 +21,6 @@
  *
  */
 
-/* $Id: poll.c,v 1.2.2.18 2005/02/22 14:11:29 jnelson Exp $*/
 
 #include "boa.h"
 

@@ -20,7 +20,6 @@
  *
  */
 
-/* $Id: escape.h,v 1.18.2.1 2002/10/26 14:42:31 jnelson Exp $ */
 
 #include "config.h"
 

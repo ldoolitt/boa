@@ -20,7 +20,6 @@
  *
  */
 
-/* $Id: globals.h,v 1.65.2.29 2005/02/22 14:11:29 jnelson Exp $*/
 
 #ifndef _GLOBALS_H
 #define _GLOBALS_H

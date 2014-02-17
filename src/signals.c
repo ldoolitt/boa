@@ -21,7 +21,6 @@
  *
  */
 
-/* $Id: signals.c,v 1.37.2.14 2005/02/22 14:11:29 jnelson Exp $*/
 
 #include "boa.h"
 #ifdef HAVE_SYS_WAIT_H

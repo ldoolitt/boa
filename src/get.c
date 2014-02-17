@@ -20,7 +20,6 @@
  *
  */
 
-/* $Id: get.c,v 1.76.2.35 2005/02/22 14:11:29 jnelson Exp $*/
 
 #include "boa.h"
 #include "access.h"

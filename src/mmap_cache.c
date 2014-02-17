@@ -19,7 +19,6 @@
  *
  */
 
-/* $Id: mmap_cache.c,v 1.9.2.9 2005/02/22 14:11:29 jnelson Exp $*/
 
 #include "boa.h"
 

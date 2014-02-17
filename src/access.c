@@ -18,7 +18,6 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/* $Id: access.c,v 1.1.2.6 2005/02/22 14:11:29 jnelson Exp $ */
 
 #include <string.h>
 #include <stdlib.h>

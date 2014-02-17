@@ -21,7 +21,6 @@
  *
  */
 
-/* $Id: util.c,v 1.61.2.22 2005/02/22 14:11:29 jnelson Exp $ */
 
 #include "boa.h"
 

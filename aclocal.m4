@@ -145,7 +145,6 @@ dnl
 dnl appeared, where function-name is the name of the function where
 dnl the __func__ identifier is used.
 dnl
-dnl @version $Id: aclocal.m4,v 1.1.2.5 2003/01/20 20:53:52 jnelson Exp $
 dnl @author Christopher Currie <christopher@currie.com>
 
 AC_DEFUN([AC_C_VAR_FUNC],

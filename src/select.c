@@ -21,7 +21,6 @@
  *
  */
 
-/* $Id: select.c,v 1.1.2.17 2005/02/22 14:11:29 jnelson Exp $*/
 
 /* algorithm:
  * handle any signals

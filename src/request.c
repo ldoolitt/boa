@@ -20,7 +20,6 @@
  *
  */
 
-/* $Id: request.c,v 1.112.2.51 2005/02/22 14:11:29 jnelson Exp $*/
 
 #include "boa.h"
 #include <stddef.h>             /* for offsetof */

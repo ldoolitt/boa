@@ -19,7 +19,6 @@
  *
  */
 
-/* $Id: config.c,v 1.31.2.30 2005/02/22 14:11:29 jnelson Exp $*/
 
 #include "boa.h"
 #include "access.h"

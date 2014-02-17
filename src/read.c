@@ -20,7 +20,6 @@
  *
  */
 
-/* $Id: read.c,v 1.49.2.14 2005/02/23 15:41:55 jnelson Exp $*/
 
 #include "boa.h"
 

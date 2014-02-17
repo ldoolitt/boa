@@ -21,7 +21,6 @@
  *
  */
 
-/* $Id: boa.c,v 1.99.2.26 2005/02/22 14:11:29 jnelson Exp $*/
 
 #include "boa.h"
 

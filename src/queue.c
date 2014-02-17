@@ -19,7 +19,6 @@
  *
  */
 
-/* $Id: queue.c,v 1.21.2.4 2005/02/22 14:11:29 jnelson Exp $*/
 
 #include "boa.h"
 
