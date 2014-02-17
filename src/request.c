@@ -172,14 +172,6 @@ void get_request(int server_sock)
         return;
     }
 
-    /* set close on exec to true */
-    if (fcntl(conn->fd, F_SETFD, 1) == -1) {
-        WARN("fctnl: unable to set close-on-exec for new socket");
-        close(fd);
-        enqueue(&request_free, conn);
-        return;
-    }
-
 #ifdef TUNE_SNDBUF
     /* Increase buffer size if we have to.
      * Only ask the system the buffer size on the first request,
