@@ -220,8 +220,7 @@ extern fd_set block_write_fdset; /* fds blocked on write */
 extern int max_fd;
 #endif
 
-/* global server variables */
-
+extern const char *config_file_name;
 extern char *access_log_name;
 extern char *error_log_name;
 extern char *cgi_log_name;

@@ -25,6 +25,7 @@
 #include "boa.h"
 
 /* globals */
+const char *config_file_name = DEFAULT_CONFIG_FILE;
 int backlog = SO_MAXCONN;
 time_t start_time;
 
@@ -35,8 +36,6 @@ int sigalrm_flag = 0;           /* 1 => signal has happened, needs attention */
 int sigterm_flag = 0;           /* lame duck mode */
 time_t current_time;
 int pending_requests = 0;
-
-extern const char *config_file_name;
 
 /* static to boa.c */
 static void usage(const char *programname);
@@ -280,7 +279,7 @@ static void drop_privs(void)
  *
  */
 
-static void fixup_server_root()
+static void fixup_server_root(void)
 {
     if (!server_root) {
 #ifdef SERVER_ROOT

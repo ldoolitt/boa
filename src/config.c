@@ -24,8 +24,6 @@
 #include "access.h"
 #include <sys/resource.h>
 
-const char *config_file_name;
-
 unsigned int server_port;
 uid_t server_uid;
 gid_t server_gid;
@@ -118,7 +116,7 @@ static uid_t current_uid = 0;
 /* function prototype */
 Command *lookup_keyword(char *c);
 
-struct ccommand clist[] = {
+static struct ccommand clist[] = {
     {"Port", S1A, c_set_int, &server_port},
     {"Listen", S1A, c_set_string, &server_ip},
     {"BackLog", S1A, c_set_int, &backlog},
@@ -391,36 +389,43 @@ static void apply_command(Command * p, char *args)
         (p->action) (NULL, NULL, p->object);
         break;
     case STMT_ONE_ARG:
-        (p->action) (args, NULL, p->object);
-        break;
-    case STMT_TWO_ARGS:
-        /* FIXME: if no 2nd arg exists, we use NULL. Desirable? */
         while (isspace(*args))
             ++args;
         if (*args == '\0') {
             log_error_time();
-            fprintf(stderr, "expected at least 1 arg! (%s)\n", p->name);
+            fprintf(stderr, "expected an argument, got none! (%s)\n", p->name);
+            exit(EXIT_FAILURE);
+        }
+        (p->action) (args, NULL, p->object);
+        break;
+    case STMT_TWO_ARGS:
+        while (isspace(*args))
+            ++args;
+        if (*args == '\0') {
+            log_error_time();
+            fprintf(stderr, "expected two arguments, did not receive any! (%s)\n", p->name);
             exit(EXIT_FAILURE);
         }
 
         second = args;
-        while (!isspace(*second))
+        while (!isspace(*second) && *second != '\0')
             ++second;
-        if (*second == '\0') {
-            /* nuthin but spaces */
-            second = NULL;
-        } else {
+        if (*second != '\0') {
             *second = '\0';
             ++second;
             while (isspace(*second))
                 ++second;
-            if (*second == '\0') {
-                second = NULL;
-            }
+        }
+
+        if (*second == '\0') {
+            log_error_time();
+            fprintf(stderr, "expected two arguments, only recieved one! (%s)\n", p->name);
+            exit(EXIT_FAILURE);
         }
 
         (p->action) (args, second, p->object);
         break;
+
     default:
         exit(EXIT_FAILURE);
     }
@@ -498,9 +503,6 @@ void read_config_files(void)
 
     current_uid = getuid();
 
-    if (!config_file_name) {
-        config_file_name = DEFAULT_CONFIG_FILE;
-    }
 #ifdef ACCESS_CONTROL
     access_init();
 #endif                          /* ACCESS_CONTROL */
