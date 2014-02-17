@@ -40,7 +40,9 @@
 
 #include <netinet/in.h>
 
+#ifdef ENABLE_MMAP
 #include <sys/mman.h>
+#endif /* ENABLE_MMAP */
 #include <sys/types.h>          /* socket, bind, accept */
 #include <sys/socket.h>         /* socket, bind, accept, setsockopt, */
 #include <sys/stat.h>           /* open */
