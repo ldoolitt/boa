@@ -170,6 +170,7 @@ void send_error(int error)
         break;
     case 4:
         the_error = "There was an error escaping a string.";
+        break;
     case 5:
         the_error = "Too many arguments were passed to the indexer.";
         break;
@@ -276,7 +277,9 @@ int index_directory(char *dir, char *title)
         ("<tr><td colspan=3>&nbsp;</td></tr>\n<tr><td colspan=3><h3>Files</h3></td></tr>\n");
 
     for (i = 0; i < numdir; ++i) {
+#ifdef GUNZIP
         int len;
+#endif
         dirbuf = array[i];
 
         if (stat(dirbuf->d_name, &statbuf) == -1)
@@ -297,8 +300,8 @@ int index_directory(char *dir, char *title)
             return -1;
         }
 
-        len = strlen(http_filename);
 #ifdef GUNZIP
+        len = strlen(http_filename);
         if (len > 3 && !memcmp(http_filename + len - 3, ".gz", 3)) {
             http_filename[len - 3] = '\0';
             html_filename[strlen(html_filename) - 3] = '\0';
@@ -352,7 +355,7 @@ int main(int argc, char *argv[])
 {
     time_t timep;
     struct tm *timeptr;
-    char *now;
+    char now[26+5+1]; /* should be enough for 26 chars + tz + NUL */
 
     if (argc < 3) {
         send_error(1);
@@ -375,17 +378,13 @@ int main(int argc, char *argv[])
 #else
     timeptr = gmtime(&timep);
 #endif
-    now = strdup(asctime(timeptr));
-    now[strlen(now) - 1] = '\0';
-#ifdef USE_LOCALTIME
-    printf("</table>\n<hr noshade>\nIndex generated %s %s\n"
-           "<!-- This program is part of the Boa Webserver Copyright (C) 1991-2002 http://www.boa.org -->\n"
-           "</body>\n</html>\n", now, TIMEZONE(timeptr));
-#else
-    printf("</table>\n<hr noshade>\nIndex generated %s UTC\n"
+    if (!strftime(now, sizeof(now), "%a %b %d %H:%M:%S %Y %z", timeptr)) {
+        send_error(7);
+        return -1;
+    }
+    printf("</table>\n<hr noshade>\nIndex generated %s\n"
            "<!-- This program is part of the Boa Webserver Copyright (C) 1991-2002 http://www.boa.org -->\n"
            "</body>\n</html>\n", now);
-#endif
 
     return 0;
 }
