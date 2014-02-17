@@ -518,7 +518,7 @@ void read_config_files(void)
         struct hostent *he;
         char temp_name[100];
 
-        if (gethostname(temp_name, 100) == -1) {
+        if (gethostname(temp_name, sizeof(temp_name)) == -1) {
             perror("gethostname:");
             exit(EXIT_FAILURE);
         }
