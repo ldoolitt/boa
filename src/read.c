@@ -402,7 +402,7 @@ int write_body(request * req)
     }
     DEBUG(DEBUG_HEADER_READ) {
         log_error_time();
-        fprintf(stderr, "%s:%d - wrote %d bytes of CGI body. %ld of %ld\n",
+        fprintf(stderr, "%s:%d - wrote %d bytes of CGI body. %lu of %lu\n",
                 __FILE__, __LINE__,
                 bytes_written, req->filepos, req->filesize);
     }
