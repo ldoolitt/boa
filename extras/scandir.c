@@ -49,7 +49,6 @@ scandir(const char *dir, struct dirent ***namelist,
     struct dirent **names;
     int count = 0;
     int pos = 0;
-    int result = -1;
 
     if (NULL == d)
         return -1;
@@ -58,11 +57,15 @@ scandir(const char *dir, struct dirent ***namelist,
         count++;
 
     names = malloc(sizeof (struct dirent *) * count);
+    if (!names)
+        return -1;
 
     closedir(d);
     d = opendir(dir);
-    if (NULL == d)
+    if (NULL == d) {
+        free(names);
         return -1;
+    }
 
     while (NULL != (current = readdir(d))) {
         if (NULL == select || select(current)) {
@@ -74,7 +77,7 @@ scandir(const char *dir, struct dirent ***namelist,
             pos++;
         }
     }
-    result = closedir(d);
+    closedir(d);
 
     if (pos != count)
         names = realloc(names, sizeof (struct dirent *) * pos);
