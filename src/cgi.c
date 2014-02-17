@@ -140,6 +140,8 @@ void clear_common_env(void)
             common_cgi_env[i] = NULL;
         }
     }
+    free(common_cgi_env);
+    common_cgi_env = NULL;
 }
 
 /*
