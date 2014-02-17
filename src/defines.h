@@ -91,13 +91,6 @@
 #endif
 
 #define CGI_VERSION				"CGI/1.1"
-
-#ifdef USE_NCSA_CGI_ENV
-#define COMMON_CGI_COUNT 8
-#else
-#define COMMON_CGI_COUNT 6
-#endif
-
 #define CGI_ENV_MAX     100
 #define CGI_ARGC_MAX 128
 

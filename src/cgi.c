@@ -82,14 +82,11 @@ void add_to_common_env(char *key, char *value)
 
 void clear_common_env(void)
 {
-    int i;
-
-    for (i = 0; i <= COMMON_CGI_COUNT; ++i) {
-        if (common_cgi_env[i] != NULL) {
-            free(common_cgi_env[i]);
-            common_cgi_env[i] = NULL;
-        }
+    while (common_cgi_env_count--) {
+        free(common_cgi_env[common_cgi_env_count]);
     }
+    free(common_cgi_env);
+    common_cgi_env = NULL;
 }
 
 /*
