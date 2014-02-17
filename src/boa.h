@@ -153,7 +153,7 @@ void send_r_bad_version(request * req, const char * version); /* 505 */
 
 /* cgi */
 void create_common_env(void);
-void add_to_common_env(char *key, char *value);
+void add_to_common_env(const char *key, const char *value);
 void clear_common_env(void);
 int add_cgi_env(request * req, const char *key, const char *value, int http_prefix);
 int init_cgi(request * req);

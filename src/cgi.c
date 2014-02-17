@@ -58,7 +58,7 @@ void create_common_env(void)
     add_to_common_env("SERVER_ADMIN", server_admin);
 }
 
-void add_to_common_env(char *key, char *value)
+void add_to_common_env(const char *key, const char *value)
 {
     common_cgi_env = realloc(common_cgi_env, (common_cgi_env_count + 2) * (sizeof(char *)));
     /* +1 for the new one and +1 for the NULL */

@@ -152,8 +152,10 @@ int ranges_fixup(request * req)
 
         /* no stop range specified or stop is too big.
          * RFC says it gets req->filesize - 1
+	 * r->stop is off_t (signed), req->filesize is unsigned long
+	 * (unsigned long) cast could have issues on 32-bit largefile systems
          */
-        if (r->stop == (off_t) -1 || r->stop >= req->filesize) {
+        if (r->stop < 0 || (unsigned long)r->stop >= req->filesize) {
             /* r->start is *not* -1 */
             r->stop = req->filesize - 1;
         }

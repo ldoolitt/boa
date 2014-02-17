@@ -22,7 +22,7 @@
 #include "boa.h"
 
 /* Like popen, but gives fd instead of FILE * */
-int open_pipe_fd(const char *command)
+static int open_pipe_fd(const char *command)
 {
     int pipe_fds[2];
     int pid;
@@ -48,7 +48,7 @@ int open_pipe_fd(const char *command)
     return pipe_fds[1];
 }
 
-int open_net_fd(const char *spec)
+static int open_net_fd(const char *spec)
 {
     char *p;
     int fd, port;
