@@ -184,31 +184,31 @@ retrysendfile:
         /* shouldn't get here, but... */
         bytes_written = 0;
     } else {
-	/* arg 3 of sendfile should have type "off_t *"
-	 * struct range element start has type "unsigned long"
-	 * Where POSIX got the idea that an offset into a file
-	 * should be signed, I'll never know.
-	 */
-	sendfile_offset = req->ranges->start;
-	if (sendfile_offset < 0) {
-		req->status = DEAD;
-		log_error_doc(req);
-		fprintf(stderr, "impossible offset (%lu) requested of sendfile\n",
-				 req->ranges->start);
-		return 0;
-	}
+	    /* arg 3 of sendfile should have type "off_t *"
+	     * struct range element start has type "unsigned long"
+	     * Where POSIX got the idea that an offset into a file
+	     * should be signed, I'll never know.
+	     */
+	    sendfile_offset = req->ranges->start;
+	    if (sendfile_offset < 0) {
+	    	req->status = DEAD;
+	    	log_error_doc(req);
+	    	fprintf(stderr, "impossible offset (%lu) requested of sendfile\n",
+	    			 req->ranges->start);
+	    	return 0;
+	    }
         bytes_written = sendfile(req->fd, req->data_fd,
                                  &sendfile_offset,
                                  bytes_to_write);
-	if (sendfile_offset < 0) {
-		req->status = DEAD;
-		log_error_doc(req);
-		fprintf(stderr,
-			"bad craziness in sendfile offset, returned %ld\n",
-			(long) sendfile_offset);
-		return 0;
-	}
-	req->ranges->start = sendfile_offset;
+	    if (sendfile_offset < 0) {
+	    	req->status = DEAD;
+	    	log_error_doc(req);
+	    	fprintf(stderr,
+	    		"bad craziness in sendfile offset, returned %ld\n",
+	    		(long) sendfile_offset);
+	    	return 0;
+	    }
+	    req->ranges->start = sendfile_offset;
         if (bytes_written < 0) {
             if (errno == EWOULDBLOCK || errno == EAGAIN) {
                 return -1;          /* request blocked at the pipe level, but keep going */
