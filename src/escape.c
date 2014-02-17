@@ -61,7 +61,7 @@ void build_needs_escape(void)
     if (a < NEEDS_ESCAPE_WORD_LENGTH) {
         fprintf(stderr,
                 "NEEDS_ESCAPE_SHIFT configuration error -- "
-                "%d should be <= log2(%d)\n", NEEDS_ESCAPE_SHIFT, a);
+                "%d should be <= log2(%u)\n", NEEDS_ESCAPE_SHIFT, a);
         exit(EXIT_FAILURE);
     } else if (a >= 2 * NEEDS_ESCAPE_WORD_LENGTH) {
         /* needs_escape_shift configuration suboptimal */
