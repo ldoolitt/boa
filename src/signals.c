@@ -178,7 +178,7 @@ void sigterm_stage2_run(void)
     range_pool_empty();
     free(server_root);
     free(server_name);
-    server_root = NULL;
+    server_root = server_name = NULL;
     exit(EXIT_SUCCESS);
 }
 
