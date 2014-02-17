@@ -80,9 +80,8 @@ void print_ka_phrase(request * req)
 {
     if (req->kacount > 0 &&
         req->keepalive == KA_ACTIVE && req->response_status < 500) {
-        /* FIXME: Should we only print one or the other if we are HTTP
-         * version between 1.0 (incl.) and 1.1 (not incl.) ?
-         */
+        if (req->http_version == HTTP11)
+            return;
         req_write(req, "Connection: Keep-Alive" CRLF "Keep-Alive: timeout=");
         req_write(req, simple_itoa(ka_timeout));
         req_write(req, ", max=");
