@@ -229,5 +229,5 @@ void range_pool_empty(void);
 void range_pool_push(Range * r);
 int ranges_fixup(request * req);
 int range_parse(request * req, const char *str);
- 
+
 #endif

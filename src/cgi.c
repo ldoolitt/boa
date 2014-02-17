@@ -427,8 +427,8 @@ int init_cgi(request * req)
     case -1:
         /* fork unsuccessful */
         /* FIXME: There is a problem here. send_r_error (called by
-         * boa_perror) would work for NPH and CGI, but not for GUNZIP.  
-         * Fix that. 
+         * boa_perror) would work for NPH and CGI, but not for GUNZIP.
+         * Fix that.
          */
         boa_perror(req, "fork failed");
         if (use_pipes) {

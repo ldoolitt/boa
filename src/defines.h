@@ -62,13 +62,13 @@
 
 #define CLIENT_STREAM_SIZE                      8192
 #define BUFFER_SIZE                             4096
-#define MAX_HEADER_LENGTH			1024
+#define MAX_HEADER_LENGTH                       1024
 
-#define MIME_HASHTABLE_SIZE			1009
-#define ALIAS_HASHTABLE_SIZE                    17
-#define PASSWD_HASHTABLE_SIZE		        47
+#define MIME_HASHTABLE_SIZE                     1009
+#define ALIAS_HASHTABLE_SIZE                      17
+#define PASSWD_HASHTABLE_SIZE                     47
 
-#define REQUEST_TIMEOUT				60
+#define REQUEST_TIMEOUT                           60
 
 #define MIME_TYPES_DEFAULT                      "/etc/mime.types"
 #define CGI_MIME_TYPE                           "application/x-httpd-cgi"
@@ -77,24 +77,24 @@
 /***** You will probably introduce buffer overruns unless you know
        what you are doing *****/
 
-#define MAX_FILE_LENGTH				NAME_MAX
-#define MAX_PATH_LENGTH				PATH_MAX
+#define MAX_FILE_LENGTH    NAME_MAX
+#define MAX_PATH_LENGTH    PATH_MAX
 
 #ifdef ACCEPT_ON
-#define MAX_ACCEPT_LENGTH MAX_HEADER_LENGTH
+#define MAX_ACCEPT_LENGTH  MAX_HEADER_LENGTH
 #else
-#define MAX_ACCEPT_LENGTH 0
+#define MAX_ACCEPT_LENGTH  0
 #endif
 
 #ifndef SERVER_VERSION
-#define SERVER_VERSION 				"Boa/0.94.14rc21"
+#define SERVER_VERSION     "Boa/0.94.14rc21"
 #endif
 
-#define CGI_VERSION				"CGI/1.1"
-#define CGI_ENV_MAX     100
-#define CGI_ARGC_MAX 128
+#define CGI_VERSION        "CGI/1.1"
+#define CGI_ENV_MAX        100
+#define CGI_ARGC_MAX       128
 
-#define SERVER_METHOD "http"
+#define SERVER_METHOD      "http"
 
 /*********** MMAP_LIST CONSTANTS ************************/
 #define MMAP_LIST_SIZE 256
@@ -163,7 +163,7 @@ extern int debug_level;
 #define SOURCE_MARKER __FILE__ ":" xstr(__LINE__)
 
 #define CRLF "\r\n"
-#define SQUASH_KA(req)	(req->keepalive=KA_STOPPED)
+#define SQUASH_KA(req) (req->keepalive=KA_STOPPED)
 
 #ifdef HAVE_FUNC
 #define WARN(mesg) log_error_mesg(__FILE__, __LINE__, __func__, mesg)

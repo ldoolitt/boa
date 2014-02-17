@@ -191,22 +191,22 @@ retrysendfile:
 	     */
 	    sendfile_offset = req->ranges->start;
 	    if (sendfile_offset < 0) {
-	    	req->status = DEAD;
-	    	log_error_doc(req);
-	    	fprintf(stderr, "impossible offset (%lu) requested of sendfile\n",
-	    			 req->ranges->start);
-	    	return 0;
+		req->status = DEAD;
+		log_error_doc(req);
+		fprintf(stderr, "impossible offset (%lu) requested of sendfile\n",
+				 req->ranges->start);
+		return 0;
 	    }
         bytes_written = sendfile(req->fd, req->data_fd,
                                  &sendfile_offset,
                                  bytes_to_write);
 	    if (sendfile_offset < 0) {
-	    	req->status = DEAD;
-	    	log_error_doc(req);
-	    	fprintf(stderr,
-	    		"bad craziness in sendfile offset, returned %ld\n",
-	    		(long) sendfile_offset);
-	    	return 0;
+		req->status = DEAD;
+		log_error_doc(req);
+		fprintf(stderr,
+			"bad craziness in sendfile offset, returned %ld\n",
+			(long) sendfile_offset);
+		return 0;
 	    }
 	    req->ranges->start = sendfile_offset;
         if (bytes_written < 0) {

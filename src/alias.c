@@ -541,7 +541,7 @@ static int init_script_alias(request * req, alias * current1, unsigned int uri_l
             if (!S_ISDIR(statbuf.st_mode)) {
                 /* check access */
                 /* the file must be readable+executable by at least
-                 * u,g,or o 
+                 * u,g,or o
                  */
                 if (!S_ISREG(statbuf.st_mode) || access(pathname, R_OK|X_OK)) {
                     send_r_forbidden(req);
@@ -573,7 +573,7 @@ static int init_script_alias(request * req, alias * current1, unsigned int uri_l
         if (!S_ISDIR(statbuf.st_mode)) {
             /* check access */
             /* the file must be readable+executable by at least
-             * u,g,or o 
+             * u,g,or o
              */
             if (!S_ISREG(statbuf.st_mode) || access(pathname, R_OK|X_OK)) {
                 send_r_forbidden(req);

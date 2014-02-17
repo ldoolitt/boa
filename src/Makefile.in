@@ -1,4 +1,3 @@
-# $Id: Makefile.in,v 1.59.2.15 2005/02/22 03:02:40 jnelson Exp $
 
 .SUFFIXES:
 .SUFFIXES: .o .c
@@ -20,7 +19,7 @@ CFLAGS = @CFLAGS@
 CPPFLAGS = @CPPFLAGS@ -I@srcdir@ -I.
 @ifGNUmake@DEPEND = .depend
 
-CC = @CC@ 
+CC = @CC@
 CPP = @CPP@
 
 SOURCES = alias.c boa.c buffer.c cgi.c cgi_header.c config.c escape.c \
@@ -30,39 +29,39 @@ SOURCES = alias.c boa.c buffer.c cgi.c cgi_header.c config.c escape.c \
 
 OBJS = $(SOURCES:.c=.o) timestamp.o @STRUTIL@
 
-all:	boa boa_indexer
+all: boa boa_indexer
 
-boa:	$(OBJS) 
+boa: $(OBJS)
 	$(CC) -o $@ @ALLSOURCES@ $(LDFLAGS) $(LIBS)
-	
-boa_indexer:	index_dir.o escape.o @SCANDIR@ @ALPHASORT@ @STRUTIL@
+
+boa_indexer: index_dir.o escape.o @SCANDIR@ @ALPHASORT@ @STRUTIL@
 	$(CC) -o $@ @ALLSOURCES@ $(LDFLAGS) $(LIBS)
 
 clean:
 	rm -f $(OBJS) boa core *~ boa_indexer index_dir.o
 	rm -f @SCANDIR@ @ALPHASORT@ @STRUTIL@ poll.o select.o access.o
-	
-distclean:	mrclean
 
-mrclean:	clean
+distclean: mrclean
+
+mrclean: clean
 	rm -f config.status config.cache config.h Makefile config.log
 
 # timestamp
 
-timestamp.o:	$(SOURCES)
+timestamp.o: $(SOURCES)
 
 # depend stuff
 @ifGNUmake@depend: $(SOURCES)
-@ifGNUmake@	$(CPP) $(CPPFLAGS) -MM @ALLSOURCES@ select.c poll.c access.c > $(DEPEND)
-        
+	@ifGNUmake@ $(CPP) $(CPPFLAGS) -MM @ALLSOURCES@ select.c poll.c access.c > $(DEPEND)
+
 @ifGNUmake@-include $(DEPEND)
 
 
 # tags
-tags:	$(SOURCES)
+tags: $(SOURCES)
 	ctags -o tags @ALLSOURCES@ *.h
 
 # object dump
-boa.objdump:    boa
+boa.objdump: boa
 	objdump --disassemble-all --source boa > $@
 
