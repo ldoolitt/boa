@@ -1,0 +1,9 @@
+*.o
+config.log
+config.status
+Makefile
+src/Makefile
+docs/Makefile
+src/boa
+src/boa_indexer
+src/config.h
