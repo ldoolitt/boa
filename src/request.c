@@ -191,10 +191,10 @@ void get_request(int server_sock)
      * and assume all subsequent sockets have the same size.
      */
     if (system_bufsize == 0) {
-        len = sizeof (system_bufsize);
+        socklen_t slen = sizeof (system_bufsize);
         if (getsockopt
-            (conn->fd, SOL_SOCKET, SO_SNDBUF, &system_bufsize, &len) == 0
-            && len == sizeof (system_bufsize)) {
+            (conn->fd, SOL_SOCKET, SO_SNDBUF, &system_bufsize, &slen) == 0
+            && slen == sizeof (system_bufsize)) {
             ;
         } else {
             WARN("getsockopt(SNDBUF)");
