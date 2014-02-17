@@ -158,6 +158,10 @@ extern int debug_level;
 
 /***************** USEFUL MACROS ************************/
 
+#define str(s) # s
+#define xstr(s) str(s)
+#define SOURCE_MARKER __FILE__ ":" xstr(__LINE__) " "
+
 #define CRLF "\r\n"
 #define SQUASH_KA(req)	(req->keepalive=KA_STOPPED)
 

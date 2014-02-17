@@ -86,8 +86,8 @@ int process_cgi_header(request * req)
 #ifdef FASCIST_LOGGING
 
         log_error_time();
-        fprintf(stderr, "%s:%d - found Location header \"%s\"\n",
-                __FILE__, __LINE__, buf + 10);
+        fprintf(stderr, SOURCE_MARKER " - found Location header \"%s\"\n",
+                buf + 10);
 #endif
 
 
@@ -156,8 +156,7 @@ int process_cgi_header(request * req)
         if (dest + howmuch > req->buffer + sizeof(req->buffer)) {
             /* big problem */
             log_error_doc(req);
-            fprintf(stderr, "Too much data to move! Aborting! %s %d\n",
-                    __FILE__, __LINE__);
+            fprintf(stderr, SOURCE_MARKER " - Too much data to move!  Aborting!\n");
             /* reset buffer pointers because we already called
                send_r_request_ok... */
             req->buffer_start = req->buffer_end = 0;

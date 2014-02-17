@@ -84,7 +84,7 @@ int init_get(request * req)
                 free(req->pathname);
             req->pathname = strdup(gzip_pathname);
             if (!req->pathname) {
-                boa_perror(req, "strdup req->pathname for gzipped filename " __FILE__ ":" STR(__LINE__));
+                boa_perror(req, SOURCE_MARKER " - strdup req->pathname for gzipped filename");
                 req->status = DONE;
                 return 1;
             }
@@ -522,7 +522,7 @@ int get_dir(request * req, struct stat *statbuf)
                 free(req->pathname);
             req->pathname = strdup(pathname_with_index);
             if (!req->pathname) {
-                boa_perror(req, "strdup of pathname_with_index for .gz files " __FILE__ ":" STR(__LINE__));
+                boa_perror(req, SOURCE_MARKER " - strdup of pathname_with_index for .gz files");
                 return 0;
             }
             if (req->http_version != HTTP09) {

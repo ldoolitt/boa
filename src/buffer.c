@@ -236,7 +236,7 @@ int req_flush(request * req)
         }
 #ifdef FASCIST_LOGGING
         log_error_time();
-        fprintf(stderr, "%s:%d - Wrote \"", __FILE__, __LINE__);
+        fprintf(stderr, SOURCE_MARKER " - Wrote \"");
         fwrite(req->buffer + req->buffer_start, sizeof (char),
                bytes_written, stderr);
         fprintf(stderr, "\" (%d bytes)\n", bytes_written);

@@ -277,8 +277,8 @@ static int date_to_tm(struct tm *parsed_gmt, const char *cmtime)
     } else {
         log_error_time();
         fprintf(stderr,
-                "Error in %s, line %d: Unable to sscanf \"%s\"\n",
-                __FILE__, __LINE__, cmtime);
+                SOURCE_MARKER " - Unable to sscanf \"%s\"\n",
+                cmtime);
         return -1;              /* error */
     }
 
