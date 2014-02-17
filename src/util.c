@@ -694,6 +694,46 @@ void strlower(char *s)
     }
 }
 
+void boa_herror(const char *msg, const char *hostname)
+{
+    /* h_errno comes from netdb.h as an 'extern int' */
+    switch(h_errno) {
+        case HOST_NOT_FOUND:
+            log_error_time();
+            fprintf(stderr, "%sHost '%s' not found.\n", msg, hostname);
+            break;
+#if NO_DATA != NO_ADDRESS
+        case NO_DATA:
+            log_error_time();
+            fprintf(stderr, "%sNo data was returned looking up "\
+                    "name '%s'.\n", msg, hostname);
+            break;
+#endif
+        case NO_ADDRESS:
+            log_error_time();
+            fprintf(stderr, "%sNo address was returned looking up "\
+                    "name '%s'.\n", msg, hostname);
+            break;
+        case NO_RECOVERY:
+            log_error_time();
+            fprintf(stderr, "%sA non-recoverable error was "\
+                    "encountered looking up name '%s'.\n",
+                    msg, hostname);
+            break;
+        case TRY_AGAIN:
+            log_error_time();
+            fprintf(stderr, "%sA temporary error was "\
+                    "encountered looking up name '%s'.\n",
+                    msg, hostname);
+            break;
+        default:
+            log_error_time();
+            fprintf(stderr, "%sAn *unknown* error (%d) was "\
+                    "encountered looking up name '%s'.\n",
+                    msg, h_errno, hostname);
+    } /* switch */
+}
+
 #ifndef DISABLE_DEBUG
 struct dbg {
     int level;

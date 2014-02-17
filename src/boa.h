@@ -20,7 +20,6 @@
  *
  */
 
-
 #ifndef _BOA_H
 #define _BOA_H
 
@@ -174,6 +173,7 @@ int real_set_block_fd(int fd);
 int real_set_nonblock_fd(int fd);
 char *to_upper(char *str);
 void strlower(char *s);
+void boa_herror(const char *msg, const char *hostname);
 int check_host(const char *r);
 #ifndef DISABLE_DEBUG
 void parse_debug(char *foo);
@@ -197,7 +197,7 @@ struct mmap_entry *find_mmap(int data_fd, struct stat *s);
 void release_mmap(struct mmap_entry *e);
 
 /* sublog */
-int open_gen_fd(char *spec);
+int open_gen_fd(const char *spec);
 int process_cgi_header(request * req);
 
 /* pipe */

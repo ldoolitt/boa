@@ -526,7 +526,7 @@ void read_config_files(void)
 
         he = gethostbyname(temp_name);
         if (he == NULL) {
-            perror("gethostbyname:");
+            boa_herror("", temp_name);
             exit(EXIT_FAILURE);
         }
 

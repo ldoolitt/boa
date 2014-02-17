@@ -69,7 +69,7 @@ AC_FUNC_MEMCMP
 AC_FUNC_MMAP
 AC_FUNC_SETVBUF_REVERSED
 AC_CHECK_FUNCS(getcwd strdup strstr strcspn strtol)
-AC_CHECK_FUNCS(gethostname gethostbyname socket inet_aton herror inet_addr)
+AC_CHECK_FUNCS(gethostname gethostbyname socket inet_aton inet_addr)
 AC_CHECK_FUNCS(scandir alphasort)
 AC_CHECK_FUNCS(madvise)
 

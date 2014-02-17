@@ -19,24 +19,7 @@
  *
  */
 
-
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <netdb.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include "compat.h"
-
-int open_pipe_fd(const char *command);
-int open_net_fd(const char *spec);
-int open_gen_fd(const char *spec);
+#include "boa.h"
 
 /* Like popen, but gives fd instead of FILE * */
 int open_pipe_fd(const char *command)
@@ -81,9 +64,7 @@ int open_net_fd(const char *spec)
     sa.sin_port = htons(port);
     he = gethostbyname(spec);
     if (!he) {
-#ifdef HAVE_HERROR
-        herror("open_net_fd");
-#endif
+        boa_herror("open_net_fd", spec);
         return -1;
     }
     memcpy(&sa.sin_addr, he->h_addr, he->h_length);
