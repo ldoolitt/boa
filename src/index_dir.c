@@ -58,6 +58,7 @@ void send_error(int error)
         break;
     case 4:
         the_error = "There was an error escaping a string.";
+	break;
     case 5:
         the_error = "Too many arguments were passed to the indexer.";
         break;
@@ -207,7 +208,7 @@ int index_directory(char *dir, char *title)
         } else {
 #endif
             if (html_escape_string(http_filename, escaped_filename,
-                                   strlen(http_filename)) == NULL) {
+                                   len) == NULL) {
                 send_error(4);
                 return -1;
             }
@@ -240,7 +241,8 @@ int main(int argc, char *argv[])
 {
     time_t timep;
     struct tm *timeptr;
-    char *now;
+    char now[28];
+    const char *ptimezone = "UTC";
 
     if (argc < 3) {
         send_error(1);
@@ -260,20 +262,15 @@ int main(int argc, char *argv[])
     time(&timep);
 #ifdef USE_LOCALTIME
     timeptr = localtime(&timep);
+    ptimezone = TIMEZONE(timeptr);
 #else
     timeptr = gmtime(&timep);
 #endif
-    now = strdup(asctime(timeptr));
+    asctime_r(timeptr, now);
     now[strlen(now) - 1] = '\0';
-#ifdef USE_LOCALTIME
     printf("</table>\n<hr noshade>\nIndex generated %s %s\n"
-           "<!-- This program is part of the Boa Webserver Copyright (C) 1991-2002 http://www.boa.org -->\n"
-           "</body>\n</html>\n", now, TIMEZONE(timeptr));
-#else
-    printf("</table>\n<hr noshade>\nIndex generated %s UTC\n"
-           "<!-- This program is part of the Boa Webserver Copyright (C) 1991-2002 http://www.boa.org -->\n"
-           "</body>\n</html>\n", now);
-#endif
+           "<!-- This program is part of the Boa Webserver Copyright (C) 1991-2014 http://www.boa.org -->\n"
+           "</body>\n</html>\n", now, ptimezone);
 
     return 0;
 }

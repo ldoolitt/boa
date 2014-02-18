@@ -26,8 +26,6 @@
 
 #include "boa.h"
 
-static void range_abort(request * req);
-static void range_add(request * req, off_t start, off_t stop);
 static Range *range_pool = NULL;
 
 void ranges_reset(request * req)

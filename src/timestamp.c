@@ -24,10 +24,10 @@
 void timestamp(void)
 {
     log_error_time();
-    fprintf(stderr, "boa: server version %s\n", SERVER_VERSION);
+    fprintf(stderr, "boa: server version " SERVER_VERSION "\n");
     log_error_time();
     fprintf(stderr, "boa: server built " __DATE__ " at " __TIME__ ".\n");
     log_error_time();
-    fprintf(stderr, "boa: starting server pid=%d, port %d\n",
+    fprintf(stderr, "boa: starting server pid=%d, port %u\n",
             (int) getpid(), server_port);
 }
